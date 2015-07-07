@@ -1355,6 +1355,7 @@ class Model(object):
         self.initial_conditions.append( (complex_pattern, value) )
         
         if distribution:
+            validate_init_dist(distribution)
             self.initial_distributions.append((distribution, complex_pattern, value.value, dist_arg))
         
     def update_initial_condition_pattern(self, before_pattern, after_pattern):

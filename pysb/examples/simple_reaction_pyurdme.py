@@ -14,6 +14,6 @@ catalyze(E(), 'b', S(), 'b', P(), (1e-4, 1e-1, 1))
 
 Parameter('E_0',100000)
 Parameter('S_0', 50000)
-Initial(E(b=None), E_0)
-Initial(S(b=None), S_0)
+Initial(E(b=None), E_0, 'set_initial_condition_place_near', [0.5,0.5])
+Initial(S(b=None), S_0, 'set_initial_condition_place_near', [0.5,0.5])
 

@@ -11,7 +11,6 @@ import numpy as np
 import itertools
 import pysb
 
-pyurdme.URDMEModel
 
 def _translate_parameters(model, param_values=None):
     # Error check
@@ -47,7 +46,7 @@ def _translate_species(model, dif0=None):
                     val=id[1]
         species_list[i] = pyurdme.Species(name="__s%d" % i, diffusion_constant=val)
 
-    return species_list, distribution_list
+    return species_list
 
     
 def _translate_reactions(model):
@@ -99,8 +98,7 @@ def _translate_reactions(model):
                                     propensity_function = rate)
     return rxn_list
     
-def _translate(model, mesh, param_values=None, dif0=None, y0=None):
-    
+def _translate(model, mesh, sp_to_idx, param_values=None, dif0=None, y0=None):
     
     urdme_model = pyurdme.URDMEModel(model.name)
     urdme_model.add_species(_translate_species(model, dif0))
@@ -109,22 +107,21 @@ def _translate(model, mesh, param_values=None, dif0=None, y0=None):
     urdme_model.add_reaction(_translate_reactions(model))
     initial_d_info = _translate_species(model, dif0)
     
-    specie_to_index = {}
-    for i,j in enumerate(model.species):
-        specie_to_index[j]='__s%d'%i
+
     
     for id in model.initial_distributions:
-        getattr(urdme_model, id[0])({urdme_model.get_species(id[1]):id[2]}, id[3])
+        getattr(urdme_model, id[0])({urdme_model.get_species(sp_to_idx[str(id[1])]):id[2]}, id[3])
        
     return urdme_model
 
 class PyurdmeSimulator(Simulator):
         
-    def __init__(self, model, tspan=None, mesh=None, initial_dist=None, cleanup=True, verbose=False):
+    def __init__(self, model, tspan=None, mesh=None, cleanup=True, verbose=False):
         super(PyurdmeSimulator, self).__init__(model, tspan, verbose)
         generate_equations(self.model, cleanup, self.verbose)
+        
     
-    def run(self, tspan=None, mesh = None, initial_dist=None, param_values=None, dif0=None, y0=None, solver = 'nsm'):
+    def run(self, tspan=None, mesh = None, param_values=None, dif0=None, y0=None, solver = 'nsm'):
 
 
         if tspan is not None:
@@ -137,13 +134,12 @@ class PyurdmeSimulator(Simulator):
         elif self.mesh is None:
             raise Exception("Mesh must be defined.")
         
-        if initial_dist is not None:
-            self.initial_dist = initial_dist
-        elif self.initial_dist is None:
-            raise Exception("Initial distribution of proteins must be defiened")        
+        specie_to_index = {}
+        for i,j in enumerate(self.model.species):
+            specie_to_index[str(j)] = '__s%d'%i
+        self.sp_to_idx = specie_to_index
         
-        
-        urdme_model = _translate(self.model, self.mesh, self.initial_dist, param_values, dif0, y0)
+        urdme_model = _translate(self.model, self.mesh, self.sp_to_idx, param_values, dif0, y0)
         urdme_model.timespan(self.tspan)
         
         result = urdme_model.run(report_level=1)
@@ -173,10 +169,7 @@ class PyurdmeSimulator(Simulator):
         return super(PyurdmeSimulator, self).get_yfull()        
 
 
-def run_pyurdme(model, tspan, mesh, initial_dist, param_values=None, dif0=None, y0=None, verbose=True):
-    """Runs pyurdme using PySB
-       the initial distribution should be a dict:
-       initial_dist={DISC(bf=None):['set_initial_condition_scatter', *arguments, i.e point=[0.5,0.5]]}"""
+def run_pyurdme(model, tspan, mesh, param_values=None, dif0=None, y0=None, verbose=True):
     sim = PyurdmeSimulator(model, verbose=verbose)
-    sim.run(tspan, mesh, initial_dist, param_values , dif0, y0)
+    sim.run(tspan, mesh, param_values , dif0, y0)
     return sim.simulation
