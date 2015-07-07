@@ -105,10 +105,7 @@ def _translate(model, mesh, sp_to_idx, param_values=None, dif0=None, y0=None):
     urdme_model.mesh = mesh
     urdme_model.add_parameter(_translate_parameters(model, param_values))
     urdme_model.add_reaction(_translate_reactions(model))
-    initial_d_info = _translate_species(model, dif0)
-    
-
-    
+      
     for id in model.initial_distributions:
         getattr(urdme_model, id[0])({urdme_model.get_species(sp_to_idx[str(id[1])]):id[2]}, id[3])
        
