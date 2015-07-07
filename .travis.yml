@@ -1,13 +1,33 @@
 language: python
+sudo: false
 python:
   - "2.7"
-virtualenv:
-  system_site_packages: true
+addons:
+  apt:
+    sources:
+    - libgraphviz-dev
+cache:
+  directories:
+    - $TRAVIS_BUILD_DIR/StochKit2.0.11
 before_install:
-  - sudo apt-get install python-scipy
+  - wget http://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh
+  - chmod +x miniconda.sh
+  - ./miniconda.sh -b
+  - export PATH=/home/travis/miniconda/bin:$PATH
+  - conda update --yes conda
 install:
-  - pip install sympy
-  - wget http://bionetgen.googlecode.com/files/BioNetGen-2.2.5-stable.zip
+  - conda install --yes python=$TRAVIS_PYTHON_VERSION numpy scipy matplotlib sympy networkx nose h5py
+  - conda install --channel juanlu001 --yes fenics
+  - pip install -i https://pypi.binstar.org/pypi/simple pygraphviz pyurdme
+  - wget http://mmbios.org/index.php/bionetgen-2-2-5-stable/bionetgen-2-2-5-stable-zip?format=raw -O BioNetGen-2.2.5-stable.zip
   - unzip BioNetGen-2.2.5-stable.zip
-  - sudo ln -s `pwd`/BioNetGen-2.2.5-stable /usr/local/share/BioNetGen
+  - export BNGPATH=`pwd`/BioNetGen-2.2.5-stable
+  - if [ ! -d "StochKit2.0.11" ] ; then
+      curl --silent -L "http://downloads.sourceforge.net/project/stochkit/StochKit2/StochKit2.0.11/StochKit2.0.11.tgz?r=http%3A%2F%2Fsourceforge.net%2Fprojects%2Fstochkit%2Ffiles%2F&ts=1434079825&use_mirror=iweb" | tar xz;
+      StochKit2.0.11/install.sh;
+    fi
+  - git clone https://github.com/JohnAbel/gillespy.git
+  - cd gillespy && STOCHKIT_HOME=$HOME/StochKit2.0.11/ python setup.py install && cd ..
 script: nosetests
+notifications:
+  slack: lopezlab:6RrEQYyVeSjYJKLWTovcqiM1
