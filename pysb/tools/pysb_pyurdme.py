@@ -142,7 +142,7 @@ class PyurdmeSimulator(Simulator):
         result = urdme_model.run(report_level=1)
     
         # species
-        
+         
         trajectories = np.zeros((len(result['sol'].keys()),len(result.get_timespan())))
         for i, sp in enumerate(result['sol'].keys()):
             trajectories[i] = np.sum(result.get_species(sp),axis=1)
