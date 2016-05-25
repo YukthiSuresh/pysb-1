@@ -523,8 +523,7 @@ These are the points at which we will get data for each ODE from the
 integrator. With this, we can now run our simulation. Enter the
 following commands to run the simulation and get the results::
 
-   >>> simres = ScipyOdeSolver(m.model, tspan=t).run()
-   >>> yout = simres.all
+   >>> yout = ScipyOdeSolver.execute(m.model, tspan=t)
 
 To verify that the simulation run you can see the content of the
 *yout* object. For example, check for the content of the *Bid*

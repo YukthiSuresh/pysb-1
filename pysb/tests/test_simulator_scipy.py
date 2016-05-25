@@ -1,7 +1,8 @@
 from pysb.testing import *
+from pysb.integrate import Solver
 import numpy as np
 from pysb import Monomer, Parameter, Initial, Observable, Rule, Expression
-from pysb.simulator import ScipyOdeSimulator, SimulatorException
+from pysb.simulator import ScipyOdeSimulator
 from pysb.examples import robertson, earm_1_0
 
 
@@ -31,9 +32,6 @@ class TestScipySimulator(object):
 
         self.model = model
 
-        # Convenience shortcut for accessing model monomer objects
-        self.mon = lambda m: self.model.monomers[m]
-
         # This timespan is chosen to be enough to trigger a Jacobian evaluation
         # on the various solvers.
         self.time = np.linspace(0, 1)
@@ -47,8 +45,7 @@ class TestScipySimulator(object):
 
     def test_vode_solver_run(self):
         """Test vode."""
-        simres = self.sim.run()
-        assert simres.nsims == 1
+        self.sim.run()
 
     def test_vode_jac_solver_run(self):
         """Test vode and analytic jacobian."""
@@ -70,71 +67,45 @@ class TestScipySimulator(object):
                                              use_analytic_jacobian=True)
         solver_lsoda_jac.run()
 
-    def test_y0_as_list(self):
-        """Test y0 with list of initial conditions"""
-        # Test the initials getter method before anything is changed
-        assert np.allclose(self.sim.initials[0][0:3],
-                           [ic[1].value for ic in
-                            self.model.initial_conditions])
-
-        initials = [10, 20, 0, 0]
-        simres = self.sim.run(initials=initials)
-        assert np.allclose(self.sim.initials[0], initials)
-        assert np.allclose(simres.observables['A_free'][0], 10)
-
-    def test_y0_as_ndarray(self):
-        """Test y0 with numpy ndarray of initial conditions"""
-        simres = self.sim.run(initials=np.asarray([10, 20, 0, 0]))
-        assert np.allclose(simres.observables['A_free'][0], 10)
-
+    @raises(NotImplementedError)
     def test_y0_as_dictionary_monomer_species(self):
         """Test y0 with model-defined species."""
-        simres = self.sim.run(initials={self.mon('A')(a=None): 10,
-                               self.mon('B')(b=1) % self.mon('A')(a=1): 0,
-                               self.mon('B')(b=None): 0})
-        assert np.allclose(self.sim.initials, [10, 0, 1, 0])
-        assert np.allclose(simres.observables['A_free'][0], 10)
+        self.sim.run(initials={"A(a=None)": 10, "B(b=1) % A(a=1)": 0,
+                               "B(b=None)": 0})
+        assert np.allclose(self.sim.concs_all()[0, 0], 10)
 
+    @raises(NotImplementedError)
     def test_y0_as_dictionary_with_bound_species(self):
         """Test y0 with dynamically generated species."""
-        simres = self.sim.run(initials={self.mon('A')(a=None): 0,
-                               self.mon('B')(b=1) % self.mon('A')(a=1): 100,
-                               self.mon('B')(b=None): 0})
-        assert np.allclose(simres.observables['AB_complex'][0], 100)
+        self.sim.run(initials={"A(a=None)": 0, "B(b=1) % A(a=1)": 100,
+                                 "B(b=None)": 0})
+        assert np.allclose(self.sim.concs_all()[0, 3], 100)
 
-    @raises(TypeError, SimulatorException)
+    @raises(NotImplementedError)
+    def test_y0_invalid_dictionary_key(self):
+        """Test y0 with invalid monomer name."""
+        self.sim.run(initials={"C(c=None)": 1})
+
+    @raises(NotImplementedError)
     def test_y0_non_numeric_value(self):
         """Test y0 with non-numeric value."""
-        self.sim.run(initials={self.mon('A')(a=None): 'eggs'})
+        self.sim.run(initials={"A(a=None)": 'eggs'})
 
     def test_param_values_as_dictionary(self):
         """Test param_values as a dictionary."""
-        simres = self.sim.run(param_values={'kbindAB': 0})
+        self.sim.run(param_values={'kbindAB': 0})
         # kbindAB=0 should ensure no AB_complex is produced.
-        assert np.allclose(simres.observables["AB_complex"], 0)
-
-    def test_param_values_as_list_ndarray(self):
-        """Test param_values as a list and ndarray."""
-        param_values = [50, 60, 70, 0, 0, 1]
-        self.sim.run(param_values=param_values)
-        assert np.allclose(self.sim.param_values, param_values)
-        # Same thing, but with a numpy array
-        param_values = np.asarray([55, 65, 75, 0, 0, 1])
-        self.sim.run(param_values=param_values)
-        assert np.allclose(self.sim.param_values, param_values)
+        assert np.allclose(self.sim.concs_observables()["AB_complex"], 0)
 
     @raises(IndexError)
     def test_param_values_invalid_dictionary_key(self):
         """Test param_values with invalid parameter name."""
         self.sim.run(param_values={'spam': 150})
 
-    @raises(ValueError, TypeError, SimulatorException)
+    @raises(ValueError, TypeError)
     def test_param_values_non_numeric_value(self):
         """Test param_values with non-numeric value."""
         self.sim.run(param_values={'ksynthA': 'eggs'})
-
-    def test_result_dataframe(self):
-        df = self.sim.run().dataframe
 
 
 @with_model
@@ -164,11 +135,7 @@ def test_integrate_with_expression():
     Rule('R3', s16() + s20() >> s16() + s1(), keff)
 
     time = np.linspace(0, 40)
-    sim = ScipyOdeSimulator(model, tspan=time)
-    simres = sim.run()
-    keff_vals = simres.expressions['keff']
-    assert len(keff_vals) == len(time)
-    assert np.allclose(keff_vals, 1.8181818181818182e-05)
+    x = ScipyOdeSimulator.execute(model, tspan=time)
 
 
 def test_robertson_integration():
@@ -176,14 +143,14 @@ def test_robertson_integration():
     t = np.linspace(0, 100)
     # Run with or without inline
     sim = ScipyOdeSimulator(robertson.model)
-    simres = sim.run(tspan=t)
-    assert simres.species.shape[0] == t.shape[0]
+    sim.run(tspan=t)
+    assert sim.concs_species().shape[0] == t.shape[0]
     if ScipyOdeSimulator._use_inline:
         # Also run without inline
         ScipyOdeSimulator._use_inline = False
         sim = ScipyOdeSimulator(robertson.model, tspan=t)
-        simres = sim.run()
-        assert simres.species.shape[0] == t.shape[0]
+        sim.run()
+        assert sim.concs_species().shape[0] == t.shape[0]
         ScipyOdeSimulator._use_inline = True
 
 
@@ -196,13 +163,8 @@ def test_earm_integration():
     if ScipyOdeSimulator._use_inline:
         # Also run without inline
         ScipyOdeSimulator._use_inline = False
-        ScipyOdeSimulator(earm_1_0.model, tspan=t).run()
+        ScipyOdeSimulator.execute(earm_1_0.model, tspan=t)
         ScipyOdeSimulator._use_inline = True
-
-
-@raises(SimulatorException)
-def test_simulation_no_tspan():
-    ScipyOdeSimulator(robertson.model).run()
 
 
 @raises(UserWarning)
