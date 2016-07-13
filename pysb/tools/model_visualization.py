@@ -103,18 +103,6 @@ def range_normalization(x, min_x, max_x, a=0.1, b=15):
     return a + (x - min_x) * (b - a) / (max_x - min_x)
 
 
-def sig_apop(t, f, td, ts):
-    """Return the amount of substrate cleaved at time t.
-
-    Keyword arguments:
-    t -- time
-    f -- is the fraction cleaved at the end of the reaction
-    td -- is the delay period between TRAIL addition and half-maximal substrate cleavage
-    ts -- is the switching time between initial and complete effector substrate  cleavage
-    """
-    return f - f / (1 + numpy.exp((t - td) / (4 * ts)))
-
-
 def button_state(state):
     """
     Gets state of the node (selected or not)
