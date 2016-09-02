@@ -230,7 +230,8 @@ class FluxVisualization:
             for kx, time in enumerate(self.tspan):
                 network_png = self.get_png(height=800)
                 img = mpimg.imread(BytesIO(network_png), format='stream')
-                imgplot = plt.imshow(img)
+                plt.imshow(img)
+                plt.axis('off')
                 writer.grab_frame()
                 # Check if stop node is selected
                 stop_state = button_state(
@@ -250,7 +251,7 @@ class FluxVisualization:
                 time_stamp = {self.node_name2id['t']: 'Time:' + ' ' + '%d' % time + ' ' + 'sec'}
                 self.update_network(edge_color=edges_color, edge_size=edges_size, time_stamp=time_stamp)
                 fig.clear()
-                tm.sleep(0.5)
+                tm.sleep(0.1)
 
     def restartable_for(self, sequence):
         """
@@ -620,7 +621,7 @@ class FluxVisualization:
         if time_stamp is not None:
             view1.update_node_views(visual_property='NODE_LABEL', values=time_stamp)
 
-    def get_png(self, height=600):
+    def get_png(self, height=800):
         """Gets png image of cytoscape network"""
         url = '%sviews/first.png?h=%d' % (self.g_cy._CyNetwork__url, height)
         return requests.get(url).content
