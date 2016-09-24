@@ -4,7 +4,8 @@ al. 2008)."""
 
 from __future__ import print_function
 from pysb.simulator import ScipyOdeSimulator
-from pylab import *
+import matplotlib.pyplot as plt
+from numpy import *
 
 from earm_1_0 import model
 
@@ -41,7 +42,7 @@ def fig_4a():
         model.parameters['L_0'].value = Ls[i]
 
         print("  L_0 = %g" % Ls[i])
-        x = ScipyOdeSimulator.execute(model, tspan=t)
+        x = ScipyOdeSimulator(model).run(tspan=t).all
 
         fs[i] = (x['PARP_unbound'][0] - x['PARP_unbound'][-1]) / x['PARP_unbound'][0]
         dP = 60 * (x['PARP_unbound'][:-1] - x['PARP_unbound'][1:]) / (dt * x['PARP_unbound'][0])  # in minutes
@@ -68,7 +69,7 @@ def fig_4b():
     print("Simulating model for figure 4B...")
 
     t = linspace(0, 6*3600, 6*60+1)  # 6 hours
-    x = ScipyOdeSimulator.execute(model, tspan=t)
+    x = ScipyOdeSimulator(model).run(tspan=t).all
 
     x_norm = c_[x['Bid_unbound'], x['PARP_unbound'], x['mSmac_unbound']]
     x_norm = 1 - x_norm / x_norm[0, :]  # gets away without max() since first values are largest
