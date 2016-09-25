@@ -53,8 +53,8 @@ def main():
           author_email='jmuhlich@bitflood.org',
           url='http://pysb.org/',
           packages=['pysb', 'pysb.generator', 'pysb.tools', 'pysb.examples',
-                    'pysb.export', 'pysb.simulator', 'pysb.testing', 
-                    'pysb.tests'],
+                    'pysb.export', 'pysb.importers', 'pysb.simulator',
+                    'pysb.testing', 'pysb.tests'],
           scripts=['scripts/pysb_export'],
           # We should really specify some minimum versions here.
           install_requires=['numpy', 'scipy', 'sympy'],
