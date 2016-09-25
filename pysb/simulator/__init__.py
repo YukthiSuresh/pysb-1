@@ -1,1 +1,2 @@
-from scipyode import ScipyOdeSimulator
+from .base import SimulatorException
+from .scipyode import ScipyOdeSimulator
