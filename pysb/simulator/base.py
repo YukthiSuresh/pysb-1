@@ -470,6 +470,17 @@ class SimulationResult(object):
         else:
             return trajectories
 
+    def _squeeze_output(self, trajectories):
+        """
+        Reduces trajectories to a 2D matrix if only one simulation present
+
+        Can be disabled by setting self.squeeze to False
+        """
+        if self.nsims == 1 and self.squeeze:
+            return trajectories[0]
+        else:
+            return trajectories
+
     @property
     def all(self):
         """Aggregate species, observables, and expressions trajectories into
