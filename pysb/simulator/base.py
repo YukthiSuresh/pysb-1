@@ -17,6 +17,9 @@ class SimulatorException(Exception):
 class Simulator(object):
     """An abstract base class for numerical simulation of models.
 
+    Please note that the interface for this class is considered
+    experimental and may change without warning as PySB is updated.
+
     Parameters
     ----------
     model : pysb.Model
@@ -208,17 +211,76 @@ class Simulator(object):
 
 class SimulationResult(object):
     """
-    Contains the results of a simulation, combined with properties and
-    methods to access them.
+    Results of a simulation with properties and methods to access them.
+
+    Please note that the interface for this class is considered
+    experimental and may change without warning as PySB is updated.
+
+    Parameters
+    ----------
+    simulator : Simulator
+        The simulator object that generated the trajectories
+    trajectories : list or numpy.ndarray
+        A set of species trajectories from a simulation. Should either be a
+        list of 2D numpy arrays or a single 3D numpy array.
+
+    Attributes
+    ----------
+    In the descriptions below, a "trajectory set" is a 2D numpy array,
+    species on first axis and time on second axis, with each element
+    containing the concentration or count of the species at the specified time.
+
+    A list of trajectory sets contains a trajectory set for each simulation.
+
+    all : list
+        List of trajectory sets. The first dimension contains species,
+        observables and expressions (in that order)
+    species : list
+        List of trajectory sets. The first dimension contains species.
+    observables : list
+        List of trajectory sets. The first dimension contains observables.
+    expressions : list
+        List of trajectory sets. The first dimension contains expressions.
+    dataframe : :py:class:`pandas.DataFrame`
+        A conversion of the trajectory sets (species, observables and
+        expressions for all simulations) into a single
+        :py:class:`pandas.DataFrame`.
     """
     def __init__(self, simulator, trajectories):
         self.squeeze = True
         self.simulator = type(simulator).__name__
         self.tout = simulator.tout
-        self._y = trajectories
-        self.nsims = len(self._y)
         self._yfull = None
         self._model = simulator._model
+
+        # Validate incoming trajectories
+        if hasattr(trajectories, 'ndim') and trajectories.ndim == 3:
+            # trajectories is a 3D array, create a list of 2D arrays
+            # This is just a view and doesn't copy the data
+            self._y = [tr for tr in trajectories]
+        else:
+            # Not a 3D array, check for a list of 2D arrays
+            try:
+                if any([tr.ndim != 2 for tr in trajectories]):
+                    raise AttributeError
+            except (AttributeError, TypeError):
+                raise ValueError("trajectories should be a 3D array or a list "
+                                 "of 2D arrays")
+            self._y = trajectories
+
+        self.nsims = len(self._y)
+        if len(self.tout) != self.nsims:
+            raise ValueError("Simulator tout should be the same length as "
+                             "trajectories")
+        for i in range(self.nsims):
+            if len(self.tout[i]) != self._y[i].shape[0]:
+                raise ValueError("The number of time points in tout[{0}] "
+                                 "should match the trajectories array for "
+                                 "simulation {0}".format(i))
+            if self._y[i].shape[1] != len(self._model.species):
+                raise ValueError("The number of species in trajectory {0} "
+                                 "should match length of "
+                                 "model.species".format(i))
 
         # Calculate ``yobs`` and ``yexpr`` based on values of ``y``
         exprs = self._model.expressions_dynamic()
@@ -258,6 +320,17 @@ class SimulationResult(object):
                 func = sympy.lambdify(obs_names, expr_subs, "numpy")
                 self._yexpr_view[n][:, i] = func(**obs_dict)
 
+    def _squeeze_output(self, trajectories):
+        """
+        Reduces trajectories to a 2D matrix if only one simulation present
+
+        Can be disabled by setting self.squeeze to False
+        """
+        if self.nsims == 1 and self.squeeze:
+            return trajectories[0]
+        else:
+            return trajectories
+
     @property
     def all(self):
         """Aggregate species, observables, and expressions trajectories into
@@ -285,9 +358,7 @@ class SimulationResult(object):
                     self._yexpr_view[n]
             self._yfull = yfull
 
-        if self.nsims == 1 and self.squeeze:
-            return self._yfull[0]
-        return self._yfull
+        return self._squeeze_output(self._yfull)
 
     @property
     def dataframe(self):
@@ -295,8 +366,11 @@ class SimulationResult(object):
             raise Exception('Please "pip install pandas" for this feature')
         sim_ids = (np.repeat(range(self.nsims), [len(t) for t in self.tout]))
         times = np.concatenate(self.tout)
-        idx = pd.MultiIndex.from_tuples(zip(sim_ids, times),
-                                        names=['simulation', 'time'])
+        if self.nsims == 1 and self.squeeze:
+            idx = pd.Index(times, name='time')
+        else:
+            idx = pd.MultiIndex.from_tuples(zip(sim_ids, times),
+                                            names=['simulation', 'time'])
         simdata = self.all
         if not isinstance(simdata, np.ndarray):
             simdata = np.concatenate(simdata)
@@ -304,21 +378,12 @@ class SimulationResult(object):
 
     @property
     def species(self):
-        if self.nsims == 1 and self.squeeze:
-            return self._y[0]
-        else:
-            return self._y
+        return self._squeeze_output(self._y)
 
     @property
     def observables(self):
-        if self.nsims == 1 and self.squeeze:
-            return self._yobs[0]
-        else:
-            return self._yobs
+        return self._squeeze_output(self._yobs)
 
     @property
     def expressions(self):
-        if self.nsims == 1 and self.squeeze:
-            return self._yexpr[0]
-        else:
-            return self._yexpr
+        return self._squeeze_output(self._yexpr)
