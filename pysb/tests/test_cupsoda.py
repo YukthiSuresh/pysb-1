@@ -1,17 +1,15 @@
 import warnings
-
 import numpy as np
 from nose.plugins.attrib import attr
-
 from pysb.examples.tyson_oscillator import model
-from pysb.simulator import CupSodaSolver
+from pysb.simulator.cupsoda import CupSodaSimulator
 
 
 @attr('gpu')
 def test_cupsoda_tyson():
     tspan = np.linspace(0, 500, 101)
 
-    solver = CupSodaSolver(model, tspan=tspan, atol=1e-12, rtol=1e-12,
+    solver = CupSodaSimulator(model, tspan=tspan, atol=1e-12, rtol=1e-12,
                            max_steps=20000, verbose=False)
     # tests of size 3 seem to fail on smaller gpus
     n_sims = 50
@@ -36,7 +34,7 @@ def test_cupsoda_tyson():
     with warnings.catch_warnings():
         warnings.filterwarnings('ignore', "Neither 'y0' nor 'param_values' "
                                           "were supplied.")
-        solver.run(param_values=None, y0=None)
+        solver.run(param_values=None, initials=None)
 
     simres = solver.run(y0=y0,
                         gpu=0,
@@ -53,7 +51,7 @@ def test_cupsoda_tyson():
 def test_memory_cases():
     tspan = np.linspace(0, 500, 101)
 
-    solver = CupSodaSolver(model, tspan=tspan, atol=1e-12, rtol=1e-12,
+    solver = CupSodaSimulator(model, tspan=tspan, atol=1e-12, rtol=1e-12,
                            max_steps=20000, verbose=False)
 
     n_sims = 50
@@ -71,7 +69,7 @@ def test_memory_cases():
     with warnings.catch_warnings():
         warnings.filterwarnings('ignore', "Neither 'y0' nor 'param_values' "
                                           "were supplied.")
-        solver.run(param_values=None, y0=None)
+        solver.run(param_values=None, initials=None)
 
     solver.run(y0=y0, gpu=0, memory_usage='global')
     solver.run(y0=y0, gpu=0, memory_usage='shared')
@@ -79,10 +77,10 @@ def test_memory_cases():
 
 
 @attr('gpu')
-def test_use_of_volumne():
+def test_use_of_volume():
     tspan = np.linspace(0, 500, 101)
 
-    solver = CupSodaSolver(model, tspan=tspan, atol=1e-12, rtol=1e-12,
+    solver = CupSodaSimulator(model, tspan=tspan, atol=1e-12, rtol=1e-12,
                            max_steps=20000, verbose=False)
 
     n_sims = 50
@@ -98,5 +96,8 @@ def test_use_of_volumne():
                 y0[:, j] = ic[1].value
                 break
 
-    solver.run(y0=y0, gpu=0, memory_usage='sharedconstant', outdir='.',
+    solver.run(initials=y0, gpu=0, memory_usage='sharedconstant', outdir='.',
                vol=vol)
+
+
+test_cupsoda_tyson()
