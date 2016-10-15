@@ -1,3 +1,4 @@
+from __future__ import print_function as _
 from pysb.simulator.base import Simulator, SimulatorException, SimulationResult
 import pysb.bng
 import numpy as np
@@ -44,7 +45,6 @@ def _get_cupsoda_path():
     ``set_cupsoda_path``, the environment variable CUPSODAPATH or in a few
     hard-coded standard locations.
     """
-
     global _cupsoda_path
 
     # Just return cached value if it's available
@@ -356,7 +356,16 @@ class CupSodaSimulator(Simulator):
         p = subprocess.Popen(command,
                              stdout=subprocess.PIPE,
                              stderr=subprocess.STDOUT)
-        self.tout, trajectories = self._load_trajectories(self._cupsoda_outfiles_dir)
+        if self.verbose:
+            for line in iter(p.stdout.readline, b''):
+                print(line, end="")
+        (p_out, p_err) = p.communicate()
+        if p.returncode:
+            raise SimulatorException(p_out.rstrip("at line") +
+                                     "\n" +
+                                     p_err.rstrip())
+        self.tout, trajectories = self._load_trajectories(
+                                       self._cupsoda_outfiles_dir)
         if self._cleanup:
             shutil.rmtree(self.tempfile_dir)
         
@@ -514,7 +523,7 @@ class CupSodaSimulator(Simulator):
 
     def _get_cmatrix(self):
         if self.verbose:
-            print "Constructing the c_matrix:"
+            print("Constructing the c_matrix:")
         c_matrix = np.zeros((len(self.param_values), self._len_rxns))
         par_names = [p.name for p in self._model_parameters_rules]
         rate_mask = np.array([p in self._model_parameters_rules for p in
@@ -602,12 +611,12 @@ class CupSodaSimulator(Simulator):
         start = time.time()
         self._load_with_pandas(filename)
         end = time.time()
-        load_time_pandas = end_time - start_time
+        load_time_pandas = end - start
 
         start = time.time()
         data = self._load_with_openfile(filename)
         end = time.time()
-        load_time_openfile = end_time - start_time
+        load_time_openfile = end - start
 
         if load_time_pandas < load_time_openfile:
             return data, True
