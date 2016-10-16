@@ -8,12 +8,11 @@ from pysb.simulator.cupsoda import CupSodaSimulator
 @attr('gpu')
 def test_cupsoda_tyson():
     tspan = np.linspace(0, 500, 101)
-
+    vol = 1e-19
     solver = CupSodaSimulator(model, tspan=tspan, atol=1e-12, rtol=1e-12,
-                           max_steps=20000, verbose=False)
+                           max_steps=20000, vol=vol, verbose=False)
     # tests of size 3 seem to fail on smaller gpus
     n_sims = 50
-    vol = 1e-19
 
     # Rate constants
     len_parameters = len(model.parameters)
@@ -32,19 +31,14 @@ def test_cupsoda_tyson():
                 break
 
     with warnings.catch_warnings():
-        warnings.filterwarnings('ignore', "Neither 'y0' nor 'param_values' "
-                                          "were supplied.")
+        warnings.filterwarnings('ignore', "Neither 'param_values' nor "
+                                          "'initials' were supplied.")
         solver.run(param_values=None, initials=None)
 
-    simres = solver.run(y0=y0,
-                        gpu=0,
-                        max_steps=20000,
-                        obs_species_only=True,
-                        memory_usage='sharedconstant',
-                        vol=vol)
+    simres = solver.run(initials=y0)
     print(simres.observables)
-    solver.run(param_values=None, y0=y0)
-    solver.run(param_values=param_values, y0=y0)
+    solver.run(param_values=None, initials=y0)
+    solver.run(param_values=param_values, initials=y0)
 
 
 @attr('gpu')
@@ -70,21 +64,22 @@ def test_memory_cases():
         warnings.filterwarnings('ignore', "Neither 'y0' nor 'param_values' "
                                           "were supplied.")
         solver.run(param_values=None, initials=None)
-
-    solver.run(y0=y0, gpu=0, memory_usage='global')
-    solver.run(y0=y0, gpu=0, memory_usage='shared')
-    solver.run(y0=y0, gpu=0, memory_usage='sharedconstant')
+        
+    solver.run(initials=y0) # memory_usage='sharedconstant'
+    solver.opts['memory_usage'] = 'global'
+    solver.run(initials=y0)
+    solver.opts['memory_usage'] = 'shared'
+    solver.run(initials=y0)
 
 
 @attr('gpu')
 def test_use_of_volume():
     tspan = np.linspace(0, 500, 101)
-
-    solver = CupSodaSimulator(model, tspan=tspan, atol=1e-12, rtol=1e-12,
-                           max_steps=20000, verbose=False)
-
-    n_sims = 50
     vol = 1e-19
+    solver = CupSodaSimulator(model, tspan=tspan, atol=1e-12, rtol=1e-12,
+                           max_steps=20000, vol=vol, verbose=False)
+
+    n_sims = 50    
 
     # Initial concentrations
     len_model_species = len(model.species)
@@ -96,8 +91,7 @@ def test_use_of_volume():
                 y0[:, j] = ic[1].value
                 break
 
-    solver.run(initials=y0, gpu=0, memory_usage='sharedconstant', outdir='.',
-               vol=vol)
+    solver.run(initials=y0)
 
 
 test_cupsoda_tyson()
