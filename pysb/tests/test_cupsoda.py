@@ -92,6 +92,3 @@ def test_use_of_volume():
                 break
 
     solver.run(initials=y0)
-
-
-test_cupsoda_tyson()
