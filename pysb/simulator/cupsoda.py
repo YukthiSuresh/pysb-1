@@ -604,4 +604,3 @@ def run_cupsoda(model, tspan, initials=None, param_values=None, integrator='cups
                            cleanup=cleanup, verbose=verbose, **kwargs)    
     simres = sim.run(initials=initials, param_values=param_values)
     return simres.all
->>>>>>> refs/remotes/origin/cupsoda
