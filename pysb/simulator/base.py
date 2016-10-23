@@ -414,8 +414,13 @@ class SimulationResult(object):
                                  "of 2D arrays")
             self._y = trajectories
         
+<<<<<<< HEAD
         self._nsims = len(self._y)
         if len(self.tout) != self._nsims:
+=======
+        self.nsims = len(self._y)
+        if len(self.tout) != self.nsims:
+>>>>>>> refs/remotes/origin/cupsoda
             raise ValueError("Simulator tout should be the same length as "
                              "trajectories")
         for i in range(self._nsims):
@@ -473,6 +478,17 @@ class SimulationResult(object):
         Can be disabled by setting self.squeeze to False
         """
         if self._nsims == 1 and self.squeeze:
+            return trajectories[0]
+        else:
+            return trajectories
+
+    def _squeeze_output(self, trajectories):
+        """
+        Reduces trajectories to a 2D matrix if only one simulation present
+
+        Can be disabled by setting self.squeeze to False
+        """
+        if self.nsims == 1 and self.squeeze:
             return trajectories[0]
         else:
             return trajectories

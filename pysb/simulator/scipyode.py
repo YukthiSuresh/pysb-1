@@ -282,5 +282,10 @@ class ScipyOdeSimulator(Simulator):
                 if self.integrator.t < self.tspan[-1]:
                     trajectories[n, i:, :] = 'nan'
                 
+<<<<<<< HEAD
         tout = np.array([self.tspan]*n_sims)
         return SimulationResult(self, tout, trajectories)
+=======
+        self.tout = np.array([self.tspan]*n_sims)
+        return SimulationResult(self, trajectories)
+>>>>>>> refs/remotes/origin/cupsoda
