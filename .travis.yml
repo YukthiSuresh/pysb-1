@@ -22,8 +22,10 @@ before_install:
     nose h5py pexpect pandas
 - pip install -i https://pypi.binstar.org/pypi/simple pygraphviz==1.3rc1
 - pip install python-coveralls
-- python scripts/install_bng.py /tmp/BioNetGen
-- export BNGPATH=/tmp/BioNetGen
+- wget "http://www.csb.pitt.edu/Faculty/Faeder/?smd_process_download=1&download_id=142"
+    -O BioNetGen-2.2.6-stable.tar.gz
+- tar xzf BioNetGen-2.2.6-stable.tar.gz
+- export BNGPATH=`pwd`/BioNetGen-2.2.6-stable
 # First install ocamlfind via opam (needed to build KaSim/KaSa)
 - opam init -a git://github.com/ocaml/opam-repository && eval $(opam config env)
 - opam install ocamlfind --yes
@@ -34,17 +36,9 @@ before_install:
 - make all
 - export KAPPAPATH=`pwd`
 - cd ../
-# Install StochKit
-- wget https://github.com/StochSS/StochKit/archive/master.zip -O StochKit.zip
-- unzip -q -d $HOME StochKit.zip
-- export STOCHKIT_HOME=$HOME/StochKit-master
-- cd $STOCHKIT_HOME
-- ./install.sh >/dev/null 2>&1
-- cd $TRAVIS_BUILD_DIR
 install:
   python setup.py build --build-lib=build/lib
 script:
-  nosetests build/lib/pysb --with-coverage --cover-inclusive
-  --cover-package=build/lib/pysb -a '!gpu'
+  nosetests build/lib/pysb --with-coverage --cover-inclusive --cover-package=build/lib/pysb
 after_success:
   coveralls

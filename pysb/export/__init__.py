@@ -70,7 +70,6 @@ documentation for the exporter classes in the package :py:mod:`pysb.export`:
    kappa
    python
    pysb_flat
-   stochkit
 """
 
 import re
@@ -130,7 +129,6 @@ formats = {
         'pysb_flat': 'PysbFlatExporter',
         'mathematica': 'MathematicaExporter',
         'matlab': 'MatlabExporter',
-        'stochkit': 'StochKitExporter'
         }
 
 def export(model, format, docstring=None):
