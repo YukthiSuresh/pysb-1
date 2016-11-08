@@ -21,7 +21,6 @@ x = np.array([tr['Product'] for tr in trajectories]).T
 plt.plot(tspan, x.mean(axis=1), 'b', lw=3, label="Product")
 plt.plot(tspan, x.max(axis=1), 'b--', lw=2, label="min/max")
 plt.plot(tspan, x.min(axis=1), 'b--', lw=2)
-
 plt.xlabel('time')
 plt.ylabel('concentration')
 plt.legend(loc='upper left')

@@ -12,6 +12,7 @@ import sympy
 import re
 import numpy as np
 import warnings
+import os
 
 
 def _exec(code, locals):
@@ -21,10 +22,78 @@ def _exec(code, locals):
 
 
 class ScipyOdeSimulator(Simulator):
-    
-    _supports = { 'multi_initials' : True,
-                  'multi_param_values' : True }
-    
+    """
+    Simulate a model using SciPy ODE integration
+
+    Uses :func:`scipy.integrate.odeint` for the ``lsoda`` integrator,
+    :func:`scipy.integrate.ode` for all other integrators.
+
+    .. warning::
+        The interface for this class is considered experimental and may
+        change without warning as PySB is updated.
+
+    Parameters
+    ----------
+    model : pysb.Model
+        Model to simulate.
+    tspan : vector-like, optional
+        Time values over which to simulate. The first and last values define
+        the time range. Returned trajectories are sampled at every value unless
+        the simulation is interrupted for some reason, e.g., due to
+        satisfaction of a logical stopping criterion (see 'tout' below).
+    initials : vector-like or dict, optional
+        Values to use for the initial condition of all species. Ordering is
+        determined by the order of model.species. If not specified, initial
+        conditions will be taken from model.initial_conditions (with
+        initial condition parameter values taken from `param_values` if
+        specified).
+    param_values : vector-like or dict, optional
+        Values to use for every parameter in the model. Ordering is
+        determined by the order of model.parameters.
+        If passed as a dictionary, keys must be parameter names.
+        If not specified, parameter values will be taken directly from
+        model.parameters.
+    verbose : bool, optional (default: False)
+        Verbose output.
+    **kwargs : dict
+        Extra keyword arguments, including:
+
+        * ``integrator``: Choice of integrator, including ``vode`` (default),
+          ``zvode``, ``lsoda``, ``dopri5`` and ``dop853``. See
+          :func:`scipy.integrate.ode` for further information.
+        * ``integrator_options``: A dictionary of keyword arguments to
+          supply to the integrator. See :func:`scipy.integrate.ode`.
+        * ``cleanup``: Boolean, `cleanup` argument used for
+          :func:`pysb.bng.generate_equations` call
+
+    Notes
+    -----
+    If ``tspan`` is not defined, it may be defined in the call to the
+    ``run`` method.
+
+    Examples
+    --------
+    Simulate a model and display the results for an observable:
+
+    >>> from pysb.examples.robertson import model
+    >>> import numpy as np
+    >>> np.set_printoptions(precision=4)
+    >>> sim = ScipyOdeSimulator(model, tspan=np.linspace(0, 40, 10))
+    >>> simulation_result = sim.run()
+    >>> print(simulation_result.observables['A_total']) \
+        #doctest: +NORMALIZE_WHITESPACE
+    [ 1.      0.899   0.8506  0.8179  0.793   0.7728  0.7557  0.7408  0.7277
+    0.7158]
+
+    For further information on retrieving trajectories (species,
+    observables, expressions over time) from the ``simulation_result``
+    object returned by :func:`run`, see the examples under the
+    :class:`SimulationResult` class.
+    """
+
+    _supports = {'multi_initials': True,
+                 'multi_param_values': True}
+
     # some sane default options for a few well-known integrators
     default_integrator_options = {
         'vode': {
@@ -62,7 +131,7 @@ class ScipyOdeSimulator(Simulator):
         # Generate the equations for the model
         pysb.bng.generate_equations(self._model, self.cleanup, self.verbose)
 
-        def eqn_substitutions(eqns):
+        def _eqn_substitutions(eqns):
             """String substitutions on the sympy C code for the ODE RHS and
             Jacobian functions to use appropriate terms for variables and
             parameters."""
@@ -100,7 +169,7 @@ class ScipyOdeSimulator(Simulator):
         code_eqs = '\n'.join(['ydot[%d] = %s;' %
                               (i, sympy.ccode(self._model.odes[i]))
                               for i in range(len(self._model.odes))])
-        code_eqs = eqn_substitutions(code_eqs)
+        code_eqs = _eqn_substitutions(code_eqs)
 
         self._test_inline()
 
@@ -160,7 +229,7 @@ class ScipyOdeSimulator(Simulator):
                     jac_eq_str = 'jac[%d, %d] = %s;' % (
                     i, j, sympy.ccode(entry))
                     jac_eqs_list.append(jac_eq_str)
-            jac_eqs = eqn_substitutions('\n'.join(jac_eqs_list))
+            jac_eqs = _eqn_substitutions('\n'.join(jac_eqs_list))
 
             # Try to inline the Jacobian if possible (as above for RHS)
             if not self._use_inline:
@@ -233,18 +302,46 @@ class ScipyOdeSimulator(Simulator):
 
     @classmethod
     def _test_inline(cls):
-        """Detect whether scipy.weave.inline is functional."""
+        """
+        Detect whether scipy.weave.inline is functional.
+
+        Produces compile warnings, which we suppress by capturing STDERR.
+        """
         if not hasattr(cls, '_use_inline'):
             cls._use_inline = False
             try:
                 if weave_inline is not None:
-                    weave_inline('int i=0; i=i;', force=1)
+                    extra_compile_args = None
+                    if os.name == 'posix':
+                        extra_compile_args = ['2>/dev/null']
+                    elif os.name == 'nt':
+                        extra_compile_args = ['2>NUL']
+                    weave_inline('int i=0; i=i;', force=1,
+                                 extra_compile_args=extra_compile_args)
                     cls._use_inline = True
             except (scipy.weave.build_tools.CompileError,
                     distutils.errors.CompileError, ImportError):
                 pass
 
     def run(self, tspan=None, initials=None, param_values=None):
+        """
+        Run a simulation and returns the result (trajectories)
+
+        .. note::
+            ``tspan``, ``initials`` and ``param_values`` values supplied to
+            this method will persist to future :func:`run` calls.
+
+        Parameters
+        ----------
+        tspan
+        initials
+        param_values
+            See parameter definitions in :class:`ScipyOdeSimulator`.
+
+        Returns
+        -------
+        A :class:`SimulationResult` object
+        """
         super(ScipyOdeSimulator, self).run(tspan=tspan,
                                            initials=initials,
                                            param_values=param_values)
@@ -252,6 +349,8 @@ class ScipyOdeSimulator(Simulator):
         trajectories = np.ndarray((n_sims, len(self.tspan),
                                   len(self._model.species)))
         for n in range(n_sims):
+            self._logger.info('[%s] Running simulation %d of %d',
+                              self._model.name, n + 1, n_sims)
             if self.integrator == 'lsoda':
                 trajectories[n] = scipy.integrate.odeint(self.func,
                                                     self.initials[n],
@@ -260,7 +359,7 @@ class ScipyOdeSimulator(Simulator):
                                                     args=(self.param_values[n],),
                                                     **self.opts)
             else:
-                self.integrator.set_initial_value(self.initials[n], 
+                self.integrator.set_initial_value(self.initials[n],
                                                   self.tspan[0])
                 # Set parameter vectors for RHS func and Jacobian
                 self.integrator.set_f_params(self.param_values[n])
@@ -268,19 +367,17 @@ class ScipyOdeSimulator(Simulator):
                     self.integrator.set_jac_params(self.param_values[n])
                 trajectories[n][0] = self.initials[n]
                 i = 1
-                if self.verbose:
-                    print("Integrating...")
-                    print("\tTime")
-                    print("\t----")
-                    print("\t%g" % self.integrator.t)
                 while self.integrator.successful() and self.integrator.t < \
                         self.tspan[-1]:
+                    self._logger.debug('[%s] Simulation %d/%d '
+                                       'Integrating t=%g',
+                                       self._model.name, n + 1, n_sims,
+                                       self.integrator.t)
                     trajectories[n][i] = self.integrator.integrate(self.tspan[i])
                     i += 1
-                    if self.verbose: print("\t%g" % self.integrator.t)
-                if self.verbose: print("...Done.")
                 if self.integrator.t < self.tspan[-1]:
                     trajectories[n, i:, :] = 'nan'
 
         tout = np.array([self.tspan]*n_sims)
+        self._logger.info('[%s] All simulation(s) complete', self._model.name)
         return SimulationResult(self, tout, trajectories)

@@ -48,6 +48,7 @@ def _get_cupsoda_path():
     ``set_cupsoda_path``, the environment variable CUPSODAPATH or in a few
     hard-coded standard locations.
     """
+
     global _cupsoda_path
 
     # Just return cached value if it's available
