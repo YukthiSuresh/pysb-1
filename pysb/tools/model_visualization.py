@@ -126,7 +126,7 @@ class FluxVisualization:
     def __init__(self, model):
         self.model = model
         self.tspan = None
-        self.y = None
+        self.y_df = None
         self.param_dict = None
         self.sp_graph = None
         self.colors_time_edges = None
@@ -191,14 +191,16 @@ class FluxVisualization:
         self.param_dict = dict((p.name, param_values[i]) for i, p in enumerate(self.model.parameters))
 
         # Solution of the differential equations
-        self.y = ScipyOdeSimulator.execute(self.model, tspan=self.tspan, param_values=self.param_dict)
+        sim_result = ScipyOdeSimulator(self.model, tspan=self.tspan, param_values=self.param_dict).run()
+        self.y_df = sim_result.dataframe
+
 
         if verbose:
             print("Creating graph")
 
         # Creates panda data frame with color values for edges and nodes.
-        self.edges_colors_sizes(self.y)
-        self.nodes_colors(self.y)
+        self.edges_colors_sizes(self.y_df)
+        self.nodes_colors(self.y_df)
 
         if verbose:
             "Updating network"
@@ -301,10 +303,10 @@ class FluxVisualization:
         if restart:
             self.restartable_for(sequence)
 
-    def edges_colors_sizes(self, y):
+    def edges_colors_sizes(self, y_df):
         """
         Converts reaction rates values to colors and sizes for the edges
-        :param y: Solution of the differential equations (from odesolve)
+        :param y_df: Data frane solution of the differential equations (from odesolve)
         :return: Returns a pandas data frame where each row is an edge and each column a time point, with the color value
         """
         all_rate_colors = {}
@@ -318,7 +320,7 @@ class FluxVisualization:
                 rate_reac = rate_reac.subs(p, self.param_dict[p])
             variables = [atom for atom in rate_reac.atoms(sympy.Symbol) if not re.match(r'\d', str(atom))]
             func = sympy.lambdify(variables, rate_reac, modules=dict(sqrt=numpy.lib.scimath.sqrt))
-            args = [y[str(l)] for l in variables]  # arguments to put in the lambdify function
+            args = [y_df[str(l)] for l in variables]  # arguments to put in the lambdify function
             react_rate = func(*args)
             rxns_matrix[idx] = react_rate
 
@@ -353,10 +355,10 @@ class FluxVisualization:
 
     # TODO CHANGE NODE SIZE INSTEAD OF NODE COLOR TO REFLECT CHANGES IN THE CONCENTRATION
 
-    def nodes_colors(self, y):
+    def nodes_colors(self, y_df):
         """
         Converts concentration values to colors to be used in the nodes
-        :param y: Solution of the differential equations (from odesolve)
+        :param y_df: Solution of the differential equations (from odesolve)
         :return: Returns a pandas data frame where each row is a node and each column a time point, with the color value
         """
         all_rate_colors = {}
@@ -366,7 +368,7 @@ class FluxVisualization:
         max_ic = max(initial_conditions_values)
 
         for idx in range(len(self.model.species)):
-            node_colors = f2hex_nodes(y['__s%d' % idx], vmin=0, vmax=max_ic, midpoint=max_ic / 2)
+            node_colors = f2hex_nodes(y_df['__s%d' % idx], vmin=0, vmax=max_ic, midpoint=max_ic / 2)
             all_rate_colors[self.node_name2id['s%d' % idx]] = node_colors
         all_nodes_colors = pandas.DataFrame(all_rate_colors).transpose()
         self.colors_time_nodes = all_nodes_colors
