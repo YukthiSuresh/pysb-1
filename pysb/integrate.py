@@ -41,15 +41,9 @@ class Solver(object):
     yobs : numpy.ndarray with record-style data-type
         Observable trajectories. Length is ``len(tspan)`` and record names
         follow ``model.observables`` names.
-    yobs_view : numpy.ndarray
-        An array view (sharing the same data buffer) on ``yobs``.
-        Dimensionality is ``(len(tspan), len(model.observables))``.
     yexpr : numpy.ndarray with record-style data-type
         Expression trajectories. Length is ``len(tspan)`` and record names
         follow ``model.expressions_dynamic()`` names.
-    yexpr_view : numpy.ndarray
-        An array view (sharing the same data buffer) on ``yexpr``.
-        Dimensionality is ``(len(tspan), len(model.expressions_dynamic()))``.
     integrator : scipy.integrate.ode
         Integrator object.
 
@@ -64,24 +58,32 @@ class Solver(object):
     def __init__(self, model, tspan, use_analytic_jacobian=False,
                  integrator='vode', cleanup=True,
                  verbose=False, **integrator_options):
-        self.sim = ScipyOdeSimulator(model, verbose=verbose, tspan=tspan,
+        self._sim = ScipyOdeSimulator(model, verbose=verbose, tspan=tspan,
                                      use_analytic_jacobian=
                                      use_analytic_jacobian,
                                      integrator=integrator, cleanup=cleanup,
                                      **integrator_options)
+        self.result = None
 
     @property
     def _use_inline(self):
         return ScipyOdeSimulator._use_inline
 
-
-    @property
-    def yobs(self):
-        return self.sim.concs_observables()
+    @_use_inline.setter
+    def _use_inline(self, use_inline):
+        ScipyOdeSimulator._use_inline = use_inline
 
     @property
     def y(self):
-        return self.sim.concs_species()
+        return self.result.species if self.result is not None else None
+
+    @property
+    def yobs(self):
+        return self.result.observables if self.result is not None else None
+
+    @property
+    def yexpr(self):
+        return self.result.expressions if self.result is not None else None
 
     def run(self, param_values=None, y0=None):
         """Perform an integration.
@@ -104,7 +106,7 @@ class Solver(object):
             initial condition parameter values taken from `param_values` if
             specified).
         """
-        self.sim.run(param_values=param_values, initials=y0)
+        self.result = self._sim.run(param_values=param_values, initials=y0)
 
 
 def odesolve(model, tspan, param_values=None, y0=None, integrator='vode',
@@ -221,8 +223,8 @@ def odesolve(model, tspan, param_values=None, y0=None, integrator='vode',
     integrator_options['integrator'] = integrator
     sim = ScipyOdeSimulator(model, tspan=tspan, cleanup=cleanup,
                             verbose=verbose, **integrator_options)
-    sim.run(param_values=param_values, initials=y0)
-    return sim.concs_all()
+    simres = sim.run(param_values=param_values, initials=y0)
+    return simres.all
 
 
 def setup_module(module):

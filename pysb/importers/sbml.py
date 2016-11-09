@@ -21,26 +21,50 @@ def sbml_translator(input_file,
                     pathway_commons=False,
                     verbose=False):
     """
-    Runs the BioNetGen sbmlTranslator binary. For more descriptions of
-    the arguments, see the `sbmlTranslator documentation
-    <http://bionetgen.org/index.php/SBML2BNGL>`_.
+    Run the BioNetGen sbmlTranslator binary to convert SBML to BNGL
 
-    :param input_file: SBML input filename
-    :param output_file: BNGL output filename
-    :param convention_file: Conventions filename
-    :param naming_conventions: Naming conventions filename
-    :param user_structures: User structures filename
-    :param molecule_id: Use SBML molecule IDs (True) or names (False).
-           IDs are less descriptive but more BNGL friendly. Use only if the
-           generated BNGL has syntactic errors
-    :param atomize: Atomize the model, i.e. attempt to infer molecular
-           structure and build rules from the model (True) or just
-           perform a flat import (False)
-    :param pathway_commons: Use pathway commons to infer molecule
-           binding. This setting requires an internet connection and will
-           query the pathway commons web service.
-    :param verbose: Print the SBML conversion output to the console if True
-    :return: BNGL output filename
+    This function runs the external program sbmlTranslator, included with
+    BioNetGen, which converts SBML files to BioNetGen language (BNGL).
+
+    Generally, PySB users don't need to run this function directly; an SBML
+    model can be imported to PySB in a single step with
+    :func:`model_from_sbml`. However, users may wish to note the parameters
+    for this function, which alter the way the SBML file is processed. These
+    parameters can be supplied as ``**kwargs`` to :func:`model_from_sbml`.
+
+    For more detailed descriptions of the arguments, see the `sbmlTranslator
+    documentation <http://bionetgen.org/index.php/SBML2BNGL>`_.
+
+    Parameters
+    ----------
+    input_file : string
+        SBML input filename
+    output_file : string, optional
+        BNGL output filename
+    convention_file : string, optional
+        Conventions filename
+    naming_conventions : string, optional
+        Naming conventions filename
+    user_structures : string, optional
+        User structures filename
+    molecule_id : bool, optional
+        Use SBML molecule IDs (True) or names (False).
+        IDs are less descriptive but more BNGL friendly. Use only if the
+        generated BNGL has syntactic errors
+    atomize : bool, optional
+        Atomize the model, i.e. attempt to infer molecular structure and
+        build rules from the model (True) or just perform a flat import (False)
+    pathway_commons : bool, optional
+        Use pathway commons to infer molecule binding. This
+        setting requires an internet connection and will query the pathway
+        commons web service.
+    verbose : bool, optional
+        Print the SBML conversion output to the console if True
+
+    Returns
+    -------
+    string
+        BNGL output filename
     """
     sbmltrans_bin = os.path.join(os.path.dirname(_get_bng_path()),
                                  'bin/sbmlTranslator')
@@ -48,7 +72,6 @@ def sbml_translator(input_file,
     if output_file is None:
         output_file = os.path.splitext(input_file)[0] + '.bngl'
     sbmltrans_args.extend(['-o', output_file])
-    working_dir = os.path.dirname(output_file)
 
     if convention_file:
         sbmltrans_args.extend(['-c', convention_file])
@@ -73,7 +96,7 @@ def sbml_translator(input_file,
         print(" ".join(sbmltrans_args))
 
     p = subprocess.Popen(sbmltrans_args,
-                         cwd=working_dir,
+                         cwd=os.getcwd(),
                          stdout=subprocess.PIPE,
                          stderr=subprocess.PIPE)
 
@@ -82,12 +105,13 @@ def sbml_translator(input_file,
             print(line, end="")
     (p_out, p_err) = p.communicate()
     if p.returncode:
-        raise SbmlTranslationError(p_out + "\n" + p_err)
+        raise SbmlTranslationError(p_out.decode('utf-8') + "\n" +
+                                   p_err.decode('utf-8'))
 
     return output_file
 
 
-def model_from_sbml(filename, cleanup=True, **kwargs):
+def model_from_sbml(filename, force=False, cleanup=True, **kwargs):
     """
     Create a PySB Model object from an Systems Biology Markup Language (SBML)
     file, using BioNetGen's
@@ -98,8 +122,8 @@ def model_from_sbml(filename, cleanup=True, **kwargs):
     :class:`BnglBuilder` class converts the BioNetGen language model into a
     PySB Model.
 
-    Limitations
-    -----------
+    Notes
+    -----
 
     Read the `sbmlTranslator documentation
     <http://bionetgen.org/index.php/SBML2BNGL>`_ for further information on
@@ -109,11 +133,17 @@ def model_from_sbml(filename, cleanup=True, **kwargs):
     ----------
     filename :
         A Systems Biology Markup Language .sbml file
+    force : bool, optional
+        The default, False, will raise an Exception if there are any errors
+        importing the model to PySB, e.g. due to unsupported features.
+        Setting to True will attempt to ignore any import errors, which may
+        lead to a model that only poorly represents the original. Use at own
+        risk!
     cleanup : bool
         Delete temporary directory on completion if True. Set to False for
         debugging purposes.
     **kwargs: kwargs
-        Keyword arguments to pass on to :func:`SbmlBuilder.sbml_translator`
+        Keyword arguments to pass on to :func:`sbml_translator`
     """
     tmpdir = tempfile.mkdtemp()
     verbose = kwargs.get('verbose', False)
@@ -123,7 +153,7 @@ def model_from_sbml(filename, cleanup=True, **kwargs):
     try:
         bngl_file = os.path.join(tmpdir, 'model.bngl')
         sbml_translator(filename, bngl_file, **kwargs)
-        return model_from_bngl(bngl_file)
+        return model_from_bngl(bngl_file, force=force)
     finally:
         if cleanup:
             shutil.rmtree(tmpdir)
