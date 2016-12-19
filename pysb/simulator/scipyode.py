@@ -56,6 +56,7 @@ class ScipyOdeSimulator(Simulator):
                                                  False)
         self.cleanup = kwargs.get('cleanup', True)
         integrator = kwargs.get('integrator', 'vode')
+        self.monomials = kwargs.get('monomials', False)
         # Generate the equations for the model
         pysb.bng.generate_equations(self._model, self.cleanup, self.verbose)
 
@@ -63,6 +64,21 @@ class ScipyOdeSimulator(Simulator):
             """String substitutions on the sympy C code for the ODE RHS and
             Jacobian functions to use appropriate terms for variables and
             parameters."""
+
+            # If returning monomials in addition to species, substitute monomial eqs into ODEs
+            if self.monomials:
+                nspecies = len(self._model.species)
+                #for i, rxn in enumerate(self._model.reactions):
+                #    eqns = eqns.replace(str(rxn['rate']), 'y[%d]' % (i + nspecies))
+
+                #Generate str repr of monomial eqs
+                mon_eqs = '\n'.join(['ydot[%d] = %s;' %
+                                     (i + nspecies, sympy.ccode(self._model.reactions[i]['rate']))
+                                     for i in range(len(self._model.reactions))])
+
+                # Then join substituted ODEs and monomial eqs
+                eqns = '\n'.join([eqns, mon_eqs])
+
             # Substitute expanded parameter formulas for any named expressions
             for e in self._model.expressions:
                 eqns = re.sub(r'\b(%s)\b' % e.name, '(' + sympy.ccode(
@@ -90,6 +106,9 @@ class ScipyOdeSimulator(Simulator):
             # Substitute 'p[i]' for any named parameters
             for i, p in enumerate(self._model.parameters):
                 eqns = re.sub(r'\b(%s)\b' % p.name, 'p[%d]' % i, eqns)
+
+
+
             return eqns
 
         # ODE RHS -----------------------------------------------
@@ -200,7 +219,11 @@ class ScipyOdeSimulator(Simulator):
         options.update(kwargs.get('integrator_options', {}))  # overwrite
         # defaults
         self.opts = options
-        self.ydot = np.ndarray(len(self._model.species))
+        if not self.monomials:
+            self.ydot = np.ndarray(len(self._model.species))
+
+        else:
+            self.ydot = np.ndarray(len(self._model.species)+len(self._model.reactions))
 
         # Integrator
         if integrator == 'lsoda':
@@ -247,13 +270,26 @@ class ScipyOdeSimulator(Simulator):
         if self.tspan is None:
             raise SimulatorException("tspan must be defined before "
                                      "simulation can run")
-        trajectories = np.ndarray((1, len(self.tspan),
+        if not self.monomials:
+            trajectories = np.ndarray((1, len(self.tspan),
                                   len(self._model.species)))
+
+        else:
+            total_eqs = len(self._model.species)+len(self._model.reactions)
+            trajectories = np.ndarray((1, len(self.tspan), total_eqs))
         if param_values is not None:
             self.param_values = param_values
         if initials is not None:
             self.initials = initials
         y0 = self.initials_list
+        if self.monomials:
+            y0_mons = np.zeros((len(self._model.reactions), ))
+            spc_sub = [('__s'+str(i), init) for i, init in enumerate(y0)]
+            param_sub = [(param.name, param.value) for param in self._model.parameters_rules()]
+            subs = spc_sub + param_sub
+            for i, rxn in enumerate(self._model.reactions):
+                y0_mons[i] = self._model.reactions[i]['rate'].subs(subs)
+            y0 = np.concatenate((y0, y0_mons))
         param_values = self.param_values
         if self.integrator == 'lsoda':
             trajectories[0] = scipy.integrate.odeint(self.func,

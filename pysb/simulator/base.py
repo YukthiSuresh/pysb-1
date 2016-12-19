@@ -277,10 +277,10 @@ class SimulationResult(object):
                 raise ValueError("The number of time points in tout[{0}] "
                                  "should match the trajectories array for "
                                  "simulation {0}".format(i))
-            if self._y[i].shape[1] != len(self._model.species):
-                raise ValueError("The number of species in trajectory {0} "
-                                 "should match length of "
-                                 "model.species".format(i))
+            #if self._y[i].shape[1] != len(self._model.species):
+            #    raise ValueError("The number of species in trajectory {0} "
+            #                     "should match length of "
+            #                     "model.species".format(i))
 
         # Calculate ``yobs`` and ``yexpr`` based on values of ``y``
         exprs = self._model.expressions_dynamic()
