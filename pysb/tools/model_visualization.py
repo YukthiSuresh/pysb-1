@@ -46,72 +46,6 @@ class MidpointNormalize(colors.Normalize):
         return numpy.ma.masked_array(numpy.interp(value, x, y))
 
 
-def f2hex_edges(fx, vmin=-0.99, vmax=0.99):
-    """
-    Converts reaction rates values to f2hex colors
-    :param fx: Vector of reaction rates (flux)
-    :param vmin: Value of minimum for normalization
-    :param vmax: Value of maximum for normalization
-    :return: This function returns a vector of colors in hex format that represents flux
-    """
-    norm = MidpointNormalize(vmin=vmin, vmax=vmax, midpoint=0)
-    f2rgb = cm.ScalarMappable(norm=norm, cmap=cm.get_cmap('coolwarm'))
-    rgb = [f2rgb.to_rgba(rate)[:3] for rate in fx]
-    colors_hex = [0] * (len(rgb))
-    for i, color in enumerate(rgb):
-        colors_hex[i] = '#%02x%02x%02x' % tuple([255 * fc for fc in color])
-    return colors_hex
-
-
-def f2hex_nodes(fx, vmin, vmax, midpoint):
-    """
-    Converts concentrations values to f2hex colors
-    :param fx: Vector of species concentration
-    :param vmin: Value of minimum for normalization
-    :param vmax: Value of maximum for normalization
-    :param midpoint: Value of midpoint for normalization
-    :return: Returns a vector of colors in hex format that represents species concentration
-    """
-    norm = MidpointNormalize(vmin=vmin, vmax=vmax, midpoint=midpoint)
-    f2rgb = cm.ScalarMappable(norm=norm, cmap=cm.get_cmap('coolwarm'))
-    rgb = [f2rgb.to_rgba(rate)[:3] for rate in fx]
-    colors_hex = [0] * (len(rgb))
-    for i, color in enumerate(rgb):
-        colors_hex[i] = '#%02x%02x%02x' % tuple([255 * fc for fc in color])
-    return colors_hex
-
-
-def magnitude(x):
-    """
-    Get magnitude of the input
-    :param x: Vector of numbers
-    :return: Magnitude of numbers
-    """
-    return numpy.floor(numpy.log10(x))
-
-
-def range_normalization(x, min_x, max_x, a=0.1, b=15):
-    """
-    Normalized vector to the [0.1,15] range
-    :param x: Vector of numbers to be normalized
-    :param min_x: Minimum value in vector x
-    :param max_x: Maximum value in vector x
-    :param a: Value of minimum used for the normalization
-    :param b: Value of maximum used for the normalization
-    :return: Normalized vector
-    """
-    return a + (x - min_x) * (b - a) / (max_x - min_x)
-
-
-def button_state(state):
-    """
-    Gets state of the node (selected or not)
-    :param state: boolean, state of node (selected or unselected)
-    :return: boolean, return the state of the node
-    """
-    return state
-
-
 class FluxVisualization:
     """
     A class to visualize PySB models
@@ -194,7 +128,6 @@ class FluxVisualization:
         sim_result = ScipyOdeSimulator(self.model, tspan=self.tspan, param_values=self.param_dict).run()
         self.y_df = sim_result.dataframe
 
-
         if verbose:
             print("Creating graph")
 
@@ -236,14 +169,14 @@ class FluxVisualization:
                 plt.axis('off')
                 writer.grab_frame()
                 # Check if stop node is selected
-                stop_state = button_state(
+                stop_state = self.button_state(
                     view1.get_node_views_as_dict()[self.node_name2id['Stop']]['NODE_SELECTED'])
                 # If the stop node is selected, the loop continues until the play or the restart buttons are selected
                 while stop_state:
                     tm.sleep(1)
-                    play_state = button_state(
+                    play_state = self.button_state(
                         view1.get_node_views_as_dict()[self.node_name2id['Play']]['NODE_SELECTED'])
-                    restart_state1 = button_state(
+                    restart_state1 = self.button_state(
                         view1.get_node_views_as_dict()[self.node_name2id['Restart']]['NODE_SELECTED'])
                     if play_state or restart_state1:
                         break
@@ -268,14 +201,14 @@ class FluxVisualization:
         for kx, time in enumerate(sequence):
 
             # Check if stop node is selected
-            stop_state = button_state(view1.get_node_views_as_dict()[self.node_name2id['Stop']]['NODE_SELECTED'])
+            stop_state = self.button_state(view1.get_node_views_as_dict()[self.node_name2id['Stop']]['NODE_SELECTED'])
             restart_state1 = False
             # If the stop node is selected, the loop continues until the play or the restart buttons are selected
             while stop_state:
                 tm.sleep(1)
-                play_state = button_state(
+                play_state = self.button_state(
                     view1.get_node_views_as_dict()[self.node_name2id['Play']]['NODE_SELECTED'])
-                restart_state1 = button_state(
+                restart_state1 = self.button_state(
                     view1.get_node_views_as_dict()[self.node_name2id['Restart']]['NODE_SELECTED'])
                 if play_state or restart_state1:
                     break
@@ -292,7 +225,7 @@ class FluxVisualization:
             time_stamp = {self.node_name2id['t']: 'Time:' + ' ' + '%d' % time + ' ' + 'sec'}
             self.update_network(edge_color=edges_color, edge_size=edges_size, time_stamp=time_stamp)
             tm.sleep(0.5)
-            restart_state2 = button_state(
+            restart_state2 = self.button_state(
                 view1.get_node_views_as_dict()[self.node_name2id['Restart']]['NODE_SELECTED'])
             if restart_state2:
                 view1.update_node_views(visual_property='NODE_SELECTED',
@@ -332,14 +265,14 @@ class FluxVisualization:
 
         # TODO check global_min_rate, is it the integration error? or what is the minimum rate value that makes sense
         global_min_rate = -6
-        global_max_rate = magnitude(numpy.abs(max(max_all_times)))
+        global_max_rate = self.magnitude(numpy.abs(max(max_all_times)))
 
         for i, rxn in enumerate(rxns_matrix):
             react_rate = rxn + self.mach_eps
-            react_rate_magnitudes = magnitude(numpy.abs(react_rate))
+            react_rate_magnitudes = self.magnitude(numpy.abs(react_rate))
             react_rate_diff_area = react_rate / numpy.power(numpy.array([10] * len(react_rate)), react_rate_magnitudes)
-            rate_colors = f2hex_edges(react_rate_diff_area)
-            rate_sizes = range_normalization(react_rate_magnitudes, min_x=global_min_rate, max_x=global_max_rate)
+            rate_colors = self.f2hex_edges(react_rate_diff_area)
+            rate_sizes = self.range_normalization(react_rate_magnitudes, min_x=global_min_rate, max_x=global_max_rate)
             for rctan in self.model.reactions_bidirectional[i]['reactants']:
                 for pro in self.model.reactions_bidirectional[i]['products']:
                     edges_id = self.edge_name2id['s' + str(rctan) + ',s' + str(pro)]
@@ -368,7 +301,7 @@ class FluxVisualization:
         max_ic = max(initial_conditions_values)
 
         for idx in range(len(self.model.species)):
-            node_colors = f2hex_nodes(y_df['__s%d' % idx], vmin=0, vmax=max_ic, midpoint=max_ic / 2)
+            node_colors = self.f2hex_nodes(y_df['__s%d' % idx], vmin=0, vmax=max_ic, midpoint=max_ic / 2)
             all_rate_colors[self.node_name2id['s%d' % idx]] = node_colors
         all_nodes_colors = pandas.DataFrame(all_rate_colors).transpose()
         self.colors_time_nodes = all_nodes_colors
@@ -632,6 +565,72 @@ class FluxVisualization:
         """Fits cytoscape network to window's size"""
         url = self.cy._CyRestClient__url + 'apply/fit/%s' % self.g_cy.get_id()
         return requests.get(url).content
+
+    @staticmethod
+    def f2hex_edges(fx, vmin=-0.99, vmax=0.99):
+        """
+        Converts reaction rates values to f2hex colors
+        :param fx: Vector of reaction rates (flux)
+        :param vmin: Value of minimum for normalization
+        :param vmax: Value of maximum for normalization
+        :return: This function returns a vector of colors in hex format that represents flux
+        """
+        norm = MidpointNormalize(vmin=vmin, vmax=vmax, midpoint=0)
+        f2rgb = cm.ScalarMappable(norm=norm, cmap=cm.get_cmap('coolwarm'))
+        rgb = [f2rgb.to_rgba(rate)[:3] for rate in fx]
+        colors_hex = [0] * (len(rgb))
+        for i, color in enumerate(rgb):
+            colors_hex[i] = '#%02x%02x%02x' % tuple([255 * fc for fc in color])
+        return colors_hex
+
+    @staticmethod
+    def f2hex_nodes(fx, vmin, vmax, midpoint):
+        """
+        Converts concentrations values to f2hex colors
+        :param fx: Vector of species concentration
+        :param vmin: Value of minimum for normalization
+        :param vmax: Value of maximum for normalization
+        :param midpoint: Value of midpoint for normalization
+        :return: Returns a vector of colors in hex format that represents species concentration
+        """
+        norm = MidpointNormalize(vmin=vmin, vmax=vmax, midpoint=midpoint)
+        f2rgb = cm.ScalarMappable(norm=norm, cmap=cm.get_cmap('coolwarm'))
+        rgb = [f2rgb.to_rgba(rate)[:3] for rate in fx]
+        colors_hex = [0] * (len(rgb))
+        for i, color in enumerate(rgb):
+            colors_hex[i] = '#%02x%02x%02x' % tuple([255 * fc for fc in color])
+        return colors_hex
+
+    @staticmethod
+    def magnitude(x):
+        """
+        Get magnitude of the input
+        :param x: Vector of numbers
+        :return: Magnitude of numbers
+        """
+        return numpy.floor(numpy.log10(x))
+
+    @staticmethod
+    def range_normalization(x, min_x, max_x, a=0.1, b=15):
+        """
+        Normalized vector to the [0.1,15] range
+        :param x: Vector of numbers to be normalized
+        :param min_x: Minimum value in vector x
+        :param max_x: Maximum value in vector x
+        :param a: Value of minimum used for the normalization
+        :param b: Value of maximum used for the normalization
+        :return: Normalized vector
+        """
+        return a + (x - min_x) * (b - a) / (max_x - min_x)
+
+    @staticmethod
+    def button_state(state):
+        """
+        Gets state of the node (selected or not)
+        :param state: boolean, state of node (selected or unselected)
+        :return: boolean, return the state of the node
+        """
+        return state
 
 
 def run_visualization(model, tspan=None, parameters=None, render_type='species', save_video=False, verbose=False):
