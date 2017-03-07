@@ -3,7 +3,7 @@
  */
 $(function(){ // on dom ready
 
-    var path = 'http://localhost:8000/graph_data2.js';
+    var path = 'http://localhost:8000/examples/graph_data_tyson_oscillator.js';
     var json_data = '';
 
     $.ajax({
