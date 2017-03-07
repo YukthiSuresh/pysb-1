@@ -3,7 +3,7 @@
  */
 $(function(){ // on dom ready
 
-    var path = '/visualization_cytoscapejs/visualization_batch/graph_data2.js';
+    var path = 'http://localhost:8000/graph_data2.js';
     var json_data = '';
 
     $.ajax({
