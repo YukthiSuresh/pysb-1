@@ -1,6 +1,6 @@
 from collections import OrderedDict
 import networkx as nx
-from helper_functions import parse_name
+from pysb.tools.helper_functions import parse_name
 import json
 from py2cytoscape.util import from_networkx
 import collections
