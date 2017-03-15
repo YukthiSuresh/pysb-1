@@ -12,26 +12,29 @@ body {
 
 
 #Play {
-    width: 10%;
+    width: 8%;
     height: 10%;
+    font-size:130%;
     position: absolute;
     top: 5%;
     right: 5%;
 }
 
 #Pause {
-    width: 10%;
+    width: 8%;
     height: 10%;
+    font-size:130%;
     position: absolute;
-    top: 8%;
+    top: 10%;
     right: 5%;
 }
 
 #Resume {
-    width: 10%;
+    width: 8%;
     height: 10%;
+    font-size:130%;
     position: absolute;
-    top: 8%;
+    top: 10%;
     right: 5%;
 }
 
@@ -49,7 +52,7 @@ position:absolute;
     height:5%;
     top:90%;
     left:10%;
-    font-size:25px;
+    font-size:120%;
     border:0px solid black;
     position:absolute;
 }
