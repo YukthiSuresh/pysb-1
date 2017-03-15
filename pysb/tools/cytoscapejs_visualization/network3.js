@@ -3,7 +3,7 @@
  */
 $(function(){ // on dom ready
 
-    var path = 'http://localhost:8000/examples/graph_data_tyson_oscillator.js';
+    var path = 'examples/graph_data_tyson_oscillator.js';
     var json_data = '';
 
     $.ajax({
@@ -18,8 +18,13 @@ $(function(){ // on dom ready
     var tspan = json_data.data.tspan;
     var model_name = json_data.data.name
 
+    var text = document.getElementById('textInput');
+    var rangeInput = document.getElementById("range");
+
+
+
     document.getElementById('myHeader').innerHTML = model_name;
-    document.getElementById('range').max = tspan.length;
+    rangeInput.max = tspan.length;
 
     $('#cy').cytoscape({
         boxSelectionEnabled: false,
@@ -80,8 +85,8 @@ $(function(){ // on dom ready
     cy.elements().qtip({
         content: ' ',
         position: {
-            my: 'top center',
-            at: 'bottom center'
+            my: 'bottom right',
+            at: 'bottom left'
         },
         style: {
             classes: 'qtip-bootstrap',
@@ -92,43 +97,15 @@ $(function(){ // on dom ready
         }
     });
 
-    function update_graph(t){
-        cy.batch(function () {
-            cy.edges().forEach(function (e) {
-                var c = e.data(`edge_color_t${t}`);
-                var s = e.data(`edge_size_t${t}`);
-                var a = e.data(`edge_qtip_t${t}`);
-                e.animate({
-                    style: {'line-color': c,
-                        'target-arrow-color': c,
-                        'source-arrow-color': c,
-                        'width': s},
-                    duration: 1000
-                });
-                e.qtip('api').set('content.text', a.toString());
-                // n.animate({style: {'width': s}})
-
-            });
-            cy.nodes().forEach(function(n){
-                var p = n.data(`rel_value_t${t}`);
-                var q = n.data(`abs_value_t${t}`);
-                n.animate({
-                    style: {'pie-1-background-size': p},
-                    duration: 1000
-                });
-                n.qtip('api').set('content.text', q.toString())
-            })
-        })
-    }
-
     var animating = (function($){
         var GuiPause = $('#Pause');
         var GuiResume = $('#Resume').hide();
 
         var Running = true;
         var advancing = function(){
+            console.log('1', idx)
             if (idx < tspan.length){
-                update_graph(idx)
+                Update(idx)
                 ;
 
                 t = setTimeout(advancing, 1000)
@@ -156,10 +133,44 @@ $(function(){ // on dom ready
         var Start = function(){
             advancing();
         };
+
+        var Update = function(t){
+        console.log('2', t)
+        rangeInput.value = t;
+        text.value = tspan[t].toFixed(2);
+        cy.batch(function () {
+            cy.edges().forEach(function (e) {
+                var c = e.data(`edge_color_t${t}`);
+                var s = e.data(`edge_size_t${t}`);
+                var a = e.data(`edge_qtip_t${t}`);
+                e.animate({
+                    style: {'line-color': c,
+                        'target-arrow-color': c,
+                        'source-arrow-color': c,
+                        'width': s},
+                    duration: 500
+                });
+                e.qtip('api').set('content.text', a.toString());
+                // n.animate({style: {'width': s}})
+
+            });
+            cy.nodes().forEach(function(n){
+                var p = n.data(`rel_value_t${t}`);
+                var q = n.data(`abs_value_t${t}`);
+                n.animate({
+                    style: {'pie-1-background-size': p},
+                    duration: 500
+                });
+                n.qtip('api').set('content.text', q.toString())
+            })
+        })
+    };
+
         return {
             Pause: Pause,
             Resume: Resume,
-            Start: Start
+            Start: Start,
+            Update: Update
         };
     })((jQuery));
 
@@ -181,16 +192,12 @@ $(function(){ // on dom ready
         animating.Resume();
     });
 
-    var rangeInput = document.getElementById("range");
-
     rangeInput.addEventListener('mouseup', function() {
-        update_graph(this.value)
+        animating.Update(this.value);
+        // update_graph(this.value)
     });
 
-    var range = document.getElementById('range'),
-        text = document.getElementById('textInput');
-
-    range.onchange = function() {
+    rangeInput.onchange = function() {
         text.value = tspan[this.value].toFixed(2);
         idx = this.value
     }
