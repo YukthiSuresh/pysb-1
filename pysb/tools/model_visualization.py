@@ -478,7 +478,7 @@ class FluxVisualization:
         edge_target_arrow_head = {self.edge_name2id[str(i[0]) + ',' + str(i[1])]: i[2]['target-arrow-shape'] for i in
                                   g.edges(data=True)}
 
-        font = ImageFont.truetype('LiberationMono-Regular.ttf', 18)
+        font = ImageFont.truetype('Arial.ttf', 18)
         node_width_values = {suid: font.getsize(label)[0] for suid, label in node_label_values.items()}
         node_height_values = {suid: font.getsize(label)[1] for suid, label in node_label_values.items()}
 
