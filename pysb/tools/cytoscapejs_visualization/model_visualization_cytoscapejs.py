@@ -251,11 +251,3 @@ class FluxVisualization:
             return x / max_value
         else:
             return x / min_value
-
-from pysb.examples.tyson_oscillator import model
-
-t = numpy.linspace(0, 100, 100)
-a = FluxVisualization(model)
-a.setup_info(tspan=t)
-g_layout = a.dot_layout()
-a.graph_to_json(path='/Users/dionisio/Desktop/', layout=g_layout)
