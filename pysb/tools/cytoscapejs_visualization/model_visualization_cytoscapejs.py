@@ -87,6 +87,8 @@ class FluxVisualization:
         Creates a species graph
         :return: Creates Networkx graph from PySB model
         """
+        # TODO: there are reactions that generate parallel edges that are not taken into account because netowrkx
+        # digraph only allows one edge between two nodes
         self.sp_graph = OrderedGraph(name=self.model.name, tspan=self.tspan.tolist())
         for idx, cp in enumerate(self.model.species):
             species_node = 's%d' % idx
@@ -103,7 +105,8 @@ class FluxVisualization:
             reactants = set(reaction['reactants'])
             products = set(reaction['products'])
             attr_reversible = {'source_arrow_shape': 'diamond', 'target_arrow_shape': 'triangle',
-                             'source_arrow_fill': 'filled', 'width': 3, 'curve_style': 'bezier'} if reaction['reversible'] else {
+                               'source_arrow_fill': 'filled', 'width': 3, 'curve_style': 'bezier'} if reaction[
+                'reversible'] else {
                 'source_arrow_shape': 'none', 'target_arrow_shape': 'triangle', 'width': 6}
             for s in reactants:
                 for p in products:
@@ -133,11 +136,11 @@ class FluxVisualization:
         # attrs['edges_sizes'] = self.size_time_edges[link_name].values.tolist()
         self.sp_graph.add_edge(*nodes, **attrs)
 
-    def graph_to_json(self, path, layout=None):
+    def graph_to_json(self, path='', layout=None):
         if not self.sp_graph:
             self.species_graph()
         data = from_networkx(self.sp_graph, layout=layout, scale=1)
-        with open(path + 'data.txt', 'w') as outfile:
+        with open(path + 'data.json', 'w') as outfile:
             json.dump(data, outfile)
 
     def dot_layout(self):
@@ -146,7 +149,6 @@ class FluxVisualization:
         pos = nx.drawing.nx_agraph.pygraphviz_layout(self.sp_graph, prog='dot', args="-Grankdir=LR")
         # TODO: may be better to change the way the py2cytoscape function reads the layout
         ordered_pos = collections.OrderedDict(sorted(pos.items()))
-        print (ordered_pos)
         return ordered_pos
 
     def edges_colors_sizes(self):
