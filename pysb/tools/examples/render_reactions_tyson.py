@@ -1,5 +1,6 @@
-from pysb.tools.model_visualization import run_visualization
 from pysb.examples.tyson_oscillator import model
+from pysb.tools.cytoscape_app.model_visualization import run_visualization
+
 # from earm.lopez_embedded import model
 
 run_visualization(model, render_type='reactions')
