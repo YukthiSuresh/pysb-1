@@ -1,9 +1,9 @@
-from pysb.testing import *
-from pysb.examples.earm_1_0 import model
 import numpy as np
+
+from pysb.examples.earm_1_0 import model
 from pysb.simulator import ScipyOdeSimulator
-from pysb.tools.model_visualization import FluxVisualization
 from pysb.simulator.base import SimulatorException
+from pysb.tools.cytoscape_app.model_visualization import FluxVisualization
 
 
 class TestFluxVisualization(object):
