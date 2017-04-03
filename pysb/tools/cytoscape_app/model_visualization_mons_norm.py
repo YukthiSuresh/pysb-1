@@ -8,7 +8,7 @@ import sympy
 import pandas
 import networkx as nx
 import time as tm
-from helper_functions import parse_name
+from pysb.tools.helper_functions import parse_name
 from py2cytoscape.data.util_network import NetworkUtil as util
 from collections import OrderedDict
 from py2cytoscape.data.cyrest_client import CyRestClient
