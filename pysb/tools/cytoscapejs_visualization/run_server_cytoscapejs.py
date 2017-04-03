@@ -2,8 +2,10 @@
 
 import SimpleHTTPServer
 import SocketServer
+import webbrowser
 
-PORT = 8000
+
+PORT = 9000
 
 Handler = SimpleHTTPServer.SimpleHTTPRequestHandler
 Handler.extensions_map.update({
@@ -14,3 +16,6 @@ httpd = SocketServer.TCPServer(("", PORT), Handler)
 
 print "Serving at port", PORT
 httpd.serve_forever()
+
+# url = "file://Users/dionisio/PycharmProjects/pysb/pysb/tools/cytoscapejs_visualization/index.html"
+# webbrowser.open(url, new=2)

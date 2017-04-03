@@ -3,7 +3,8 @@
  */
 $(function(){ // on dom ready
 
-    var path = 'examples/graph_data_tyson_oscillator.js';
+    var path = 'examples/tyson_cycle/graph_data_tyson_oscillator.json';
+    // var path = 'examples/EARM/data.json'
     var json_data = '';
 
     $.ajax({
@@ -103,7 +104,6 @@ $(function(){ // on dom ready
 
         var Running = true;
         var advancing = function(){
-            console.log('1', idx)
             if (idx < tspan.length){
                 Update(idx)
                 ;
@@ -135,7 +135,6 @@ $(function(){ // on dom ready
         };
 
         var Update = function(t){
-        console.log('2', t)
         rangeInput.value = t;
         text.value = tspan[t].toFixed(2);
         cy.batch(function () {
@@ -143,11 +142,12 @@ $(function(){ // on dom ready
                 var c = e.data(`edge_color_t${t}`);
                 var s = e.data(`edge_size_t${t}`);
                 var a = e.data(`edge_qtip_t${t}`);
+                console.log(e, t, c, s, a)
                 e.animate({
                     style: {'line-color': c,
-                        'target-arrow-color': c,
-                        'source-arrow-color': c,
-                        'width': s},
+                            'target-arrow-color': c,
+                            'source-arrow-color': c,
+                            'width': s},
                     duration: 500
                 });
                 e.qtip('api').set('content.text', a.toString());
