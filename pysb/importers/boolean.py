@@ -5,14 +5,16 @@ except ImportError:
     raise ImportError('BooleanTranslator requires the package booleannet. \
     Run "pip install booleannet" at the command line to install it')
 from pysb.builder import Builder
-from pysb.core import MonomerPattern, ComplexPattern, RuleExpression, ReactionPattern
+from pysb.core import *
 import copy
 
 class BooleanTranslationError(Exception):
     pass
 
-class _Node(): # define the node class for tree construction
-
+class _Node(): 
+    """
+    Node class for tree construction
+    """
     def __init__(self, function, function_nodes, id='', index=1):
         self.id = id
         self.tree = None
@@ -47,23 +49,71 @@ class BooleanTranslator(Builder):
     See :py:func:`model_from_boolean` for further details.
     """
     _supported_formats = ['BooleanNet']
+    _supported_modes = ['GSP','ROA'] # 'GA'
+    # GSP: Gillespie
+    # ROA: Random-order asynchronous
+    # GA:  General asynchronous    
     
-    def __init__(self, filename, type='BooleanNet', force=False):
+    def __init__(self, filename, format='BooleanNet', mode='GSP', force=False):
         super(BooleanTranslator, self).__init__()
-        
-        self._parse_input_file(filename, type=type)
-
+        self._parse_input_file(filename, format=format)
         # create monomers, initial conditions, and observables
+        #~~~~~
+        if mode == 'ROA':
+            mon = self.monomer('RESET', ['reset'], {'reset' : ['N', 'Y']})
+            mon_pat = MonomerPattern(mon, {'reset' : 'N'}, compartment=None)
+            cpx_pat = ComplexPattern([mon_pat], compartment=None)
+            self.initial(cpx_pat, self.parameter('RESET_init', 1))
+            self.parameter('k_reset', 1e10)
+            reset_pat = []
+        #~~~~~
         for name,state in self.initial_states.items():
-            mon = self.monomer(name, ['state'], {'state' : ['False','True']})
+            # create monomer
+            mon_sites = ['state']
+            mon_site_states = {'state' : ['False','True']}
+            #~~~~~
+            if mode == 'ROA':
+                mon_sites.append('reset')
+                mon_site_states['reset'] = ['N', 'Y']
+            #~~~~~
+            mon = self.monomer(name, mon_sites, mon_site_states)
             # create initial condition and observable for both 'False' and 'True' states
             for s in mon.site_states['state']:
+                mon_pat_states = {'state' : s}
+                mon_pat = MonomerPattern(mon, mon_pat_states, compartment=None)
+                cpx_pat = ComplexPattern([mon_pat], compartment=None)
+                self.observable('%s_%s_obs'%(name,s), cpx_pat)
+                #~~~~~
+                if mode == 'ROA':
+                    mon_pat_states = {'state' : s, 'reset' : 'N'}
+                    mon_pat = MonomerPattern(mon, mon_pat_states, compartment=None)
+                    cpx_pat = ComplexPattern([mon_pat], compartment=None)
+                #~~~~~
                 par = self.parameter('%s_%s_init'%(name,s), 
                                      1 if s == state else 0)
-                mon_pat = MonomerPattern(mon, {'state' : s}, compartment=None)
-                cpx_pat = ComplexPattern([mon_pat], compartment=None)
                 self.initial(cpx_pat, par)
-                self.observable('%s_%s_obs'%(name,s), cpx_pat)
+            #~~~~~
+            if mode == 'ROA':
+                mon_pat = MonomerPattern(mon, {'reset' : 'Y'}, compartment=None)
+                cpx_pat = ComplexPattern([mon_pat], compartment=None)
+                reset_pat.append(cpx_pat)
+            #~~~~~
+        #~~~~~
+        if mode == 'ROA':
+            n_fired = self.observable('N_FIRED', ReactionPattern(reset_pat))
+            # RESET(reset~N) <-> RESET(reset~Y)  1e10*if(N_FIRED>(N_NODES-0.5),1,0), 1e10*if(N_FIRED<0.5,1,0)
+            reset_mon = self.model.monomers['RESET']
+            reset_reac = MonomerPattern(reset_mon, {'reset' : 'N'}, compartment=None)
+            reset_prod = MonomerPattern(reset_mon, {'reset' : 'Y'}, compartment=None)
+            rule_expr = RuleExpression(as_reaction_pattern(reset_reac),
+                                       as_reaction_pattern(reset_prod),
+                                       is_reversible=True)
+            n_nodes = self.parameter('N_NODES', len(self.initial_states.keys()))
+            k_reset = self.model.parameters['k_reset'].value
+            kf_expr = self.expression('reset_expr_f', k_reset*(n_fired>(n_nodes-0.5)))
+            kr_expr = self.expression('reset_expr_r', k_reset*(n_fired< 0.5))
+            self.rule('RESET_rule', rule_expr, kf_expr, kr_expr)
+        #~~~~~        
 
         # minimize the ROBDD paths
         orderedNodes = self._findMinPathOrderHeap(self.functions, self.function_nodes) 
@@ -71,12 +121,12 @@ class BooleanTranslator(Builder):
         # create Rules
         BDDs = self._grove(self.functions, orderedNodes)   
         for bdd in BDDs:
-            self._createRules(bdd)
+            self._createRules(bdd, mode=mode)
     
-    def _parse_input_file(self, filename, type="BooleanNet"):
-        if type not in BooleanTranslator._supported_formats:
-            raise BooleanTranslationError(type + ' file type not supported')
-        elif type == 'BooleanNet':
+    def _parse_input_file(self, filename, format="BooleanNet"):
+        if format not in BooleanTranslator._supported_formats:
+            raise BooleanTranslationError(format + ' file type not supported')
+        elif format == 'BooleanNet':
             self._parse_BooleanNet_file(filename)
         
     def _parse_BooleanNet_file(self, filename):
@@ -407,7 +457,7 @@ class BooleanTranslator(Builder):
                 
         return paths
     
-    def _createRules(self, root): 
+    def _createRules(self, root, mode='GSP'): 
         """
         Create Rules from the paths in a BDD (or tree)
         """
@@ -415,39 +465,72 @@ class BooleanTranslator(Builder):
         rank = self.function_ranks[function_node]
         rate_expr = self.parameter('rate_%s'%function_node, 1./rank)
         paths = self._pathExpansion(root)
-        mon = self.model.monomers[function_node]
-        node_true = ComplexPattern([MonomerPattern(mon, {'state' : 'True'}, compartment=None)],
-                                   compartment=None)
-        node_false = ComplexPattern([MonomerPattern(mon, {'state' : 'False'}, compartment=None)],
-                                   compartment=None)
         n = 0 # number of rules
         for p in paths:
             skip = False
+            #~~~~~
+            if mode == 'ROA':
+                clipped = False
+            #~~~~~
             if function_node in p: # node update depends on itself
                 idx = p.index(function_node)
                 if p[idx+1] == p[-1]: # this is a null event (not state change)
                     skip = True
                 else:
                     p = p[:idx] + p[idx+2:] # remove node + state
+                    #~~~~~
+                    if mode == 'ROA':
+                        clipped = True
+                    #~~~~~
             if not skip:
-                reactant_pats = []
-                product_pats = []
-                reactant_pats.append(node_true if p[-1] == 'False' else node_false)
-                product_pats.append(node_false if p[-1] == 'False' else node_true)
+                reactant_patterns = []
+                product_patterns = []
+                reac_states = {'state' : 'True'} if p[-1] == 'False' else {'state' : 'False'}
+                prod_states = {'state' : 'False'} if p[-1] == 'False' else {'state' : 'True'}
+                #~~~~~
+                if mode == 'ROA':
+                    if not clipped:
+                        reac_states = {'state' : WILD}
+                    reac_states['reset'] = 'N'
+                    prod_states['reset'] = 'Y'
+                #~~~~~
+                mon = self.model.monomers[function_node]
+                reac_pat = ComplexPattern([MonomerPattern(mon, reac_states, compartment=None)],
+                                   compartment=None)
+                prod_pat = ComplexPattern([MonomerPattern(mon, prod_states, compartment=None)],
+                                           compartment=None)
+                reactant_patterns.append(reac_pat)
+                product_patterns.append(prod_pat)
                 j = 0
                 while j < len(p[:-1]):
                     if p[j] != function_node:
                         mon = self.model.monomers[p[j]]
                         node_context = ComplexPattern([MonomerPattern(mon, {'state' : p[j+1]}, compartment=None)],
                                                       compartment=None)
-                        reactant_pats.append(node_context)
-                        product_pats.append(node_context)
+                        reactant_patterns.append(node_context)
+                        product_patterns.append(node_context)
                     j = j + 2
-                rule_expr = RuleExpression(ReactionPattern(reactant_pats),
-                                          ReactionPattern(product_pats),
+                rule_expr = RuleExpression(ReactionPattern(reactant_patterns),
+                                          ReactionPattern(product_patterns),
                                           is_reversible=False)
                 self.rule('%s_rule%d'%(function_node,n), rule_expr, rate_expr)
                 n = n + 1
+        #~~~~~
+        # reset rules
+        if mode == 'ROA':
+            mon = self.model.monomers[function_node]
+            reac_pat = ComplexPattern([MonomerPattern(mon, {'reset' : 'Y'}, compartment=None)], 
+                                      compartment=None)
+            prod_pat = ComplexPattern([MonomerPattern(mon, {'reset' : 'N'}, compartment=None)], 
+                                      compartment=None)
+            mon = self.model.monomers['RESET']
+            context_pat = ComplexPattern([MonomerPattern(mon, {'reset' : 'Y'}, compartment=None)], 
+                                         compartment=None)
+            rule_expr = RuleExpression(ReactionPattern([reac_pat, context_pat]),
+                                          ReactionPattern([prod_pat, context_pat]),
+                                          is_reversible=False)
+            self.rule('%s_RESET'%function_node, rule_expr, self.model.parameters['k_reset'])
+        #~~~~~
     
     def _grove(self, functions, function_nodes): 
         """ 
@@ -526,7 +609,7 @@ class BooleanTranslator(Builder):
         plt.tight_layout()
         plt.show()
         
-def model_from_boolean(filename, type='BooleanNet', force=False):
+def model_from_boolean(filename, format='BooleanNet', mode='ROA', force=False):
     """
     Convert a Boolean model into a PySB Model.
 
@@ -547,5 +630,5 @@ def model_from_boolean(filename, type='BooleanNet', force=False):
         lead to a model that only poorly represents the original. Use at own
         risk!
     """
-    bt = BooleanTranslator(filename, type=type, force=force)
+    bt = BooleanTranslator(filename, format=format, mode=mode, force=force)
     return bt.model
