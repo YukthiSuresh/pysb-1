@@ -56,6 +56,12 @@ class BooleanTranslator(Builder):
     
     def __init__(self, filename, format='BooleanNet', mode='GSP', force=False):
         super(BooleanTranslator, self).__init__()
+        if format not in self._supported_formats:
+            raise BooleanTranslationError('\'%s\' is not a supported file format. Try one of %s.' % 
+                                          (str(format), str(self._supported_formats)))
+        elif mode not in self._supported_modes:
+            raise BooleanTranslationError('\'%s\' is not a supported update mode. Try one of %s.' % 
+                                          (str(mode), str(self._supported_modes)))
         self._parse_input_file(filename, format=format)
         # create monomers, initial conditions, and observables
         #~~~~~
@@ -613,7 +619,7 @@ class BooleanTranslator(Builder):
         plt.tight_layout()
         plt.show()
         
-def model_from_boolean(filename, format='BooleanNet', mode='ROA', force=False):
+def model_from_boolean(filename, format='BooleanNet', mode='GSP', force=False):
     """
     Convert a Boolean model into a PySB Model.
 
