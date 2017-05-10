@@ -1,7 +1,7 @@
 from __future__ import absolute_import
 from __future__ import print_function as _
 import pysb.core
-from pysb.generator.bng import BngGenerator
+from pysb.generator.bng import BngGenerator, format_complexpattern
 import os
 import subprocess
 import re
@@ -15,6 +15,7 @@ import shutil
 import collections
 import pysb.pathfinder as pf
 from pysb.logging import get_logger, EXTENDED_DEBUG
+import logging
 
 try:
     from cStringIO import StringIO
@@ -51,16 +52,24 @@ class BngBaseInterface(object):
 
     @abc.abstractmethod
     def __init__(self, model=None, verbose=False, cleanup=False,
-                 output_prefix=None, output_dir=None):
+                 output_prefix=None, output_dir=None,
+                 model_additional_species=None):
         self._logger = get_logger(__name__,
                                   model=model,
                                   log_level=verbose)
+        if model:
+            self.verbose = self._logger.logger.getEffectiveLevel()
+        else:
+            self.verbose = self._logger.getEffectiveLevel()
+
         self._base_file_stem = 'pysb'
         self.cleanup = cleanup
         self.output_prefix = 'tmpBNG' if output_prefix is None else \
             output_prefix
         if model:
-            self.generator = BngGenerator(model)
+            self.generator = BngGenerator(
+                model, additional_initials=model_additional_species
+            )
             self.model = self.generator.model
             self._check_model()
         else:
@@ -181,8 +190,7 @@ class BngBaseInterface(object):
 
     def read_simulation_results(self):
         """
-        Reads the results of a BNG simulation and parses them into a numpy
-        array
+        Read the results of a BNG simulation as a numpy array
 
         Returns
         -------
@@ -191,53 +199,77 @@ class BngBaseInterface(object):
             species/observables/expressions on X axis depending on
             simulation type)
         """
-        self._logger.debug('Reading simulation results: %s.{cdat,gdat}' %
-                           self.base_filename)
-        names = ['time']
+        return self.read_simulation_results_multi([self.base_filename])[0]
 
-        # Read concentrations data
-        try:
-            cdat_arr = numpy.loadtxt(self.base_filename + '.cdat', skiprows=1)
-            # -1 for time column
-            names += ['__s%d' % i for i in range(cdat_arr.shape[1] - 1)]
-        except IOError:
-            cdat_arr = None
+    @staticmethod
+    def read_simulation_results_multi(base_filenames):
+        """
+        Read the results of multiple BNG simulations
 
-        # Read groups data
-        try:
-            with open(self.base_filename + '.gdat', 'r') as f:
-                # Exclude \# and time column
-                names += f.readline().split()[2:]
-                # Exclude first column (time)
-                gdat_arr = numpy.loadtxt(f)
+        Parameters
+        ----------
+        base_filenames: list of str
+            A list of filename stems to read simulation results in from,
+            including the full path but not including any file extension.
+
+        Returns
+        -------
+        list of numpy.ndarray
+            List of simulation results, each in a 2D matrix (time on Y axis,
+            species/observables/expressions on X axis depending on
+            simulation type)
+        """
+        list_of_yfulls = []
+        for base_filename in base_filenames:
+            names = ['time']
+
+            # Read concentrations data
+            try:
+                cdat_arr = numpy.loadtxt(base_filename + '.cdat', skiprows=1)
+                # -1 for time column
+                names += ['__s%d' % i for i in range(cdat_arr.shape[1] - 1)]
+            except IOError:
+                cdat_arr = None
+
+            # Read groups data
+            try:
+                with open(base_filename + '.gdat', 'r') as f:
+                    # Exclude \# and time column
+                    names += f.readline().split()[2:]
+                    # Exclude first column (time)
+                    gdat_arr = numpy.loadtxt(f)
+                    if cdat_arr is None:
+                        cdat_arr = numpy.ndarray((len(gdat_arr), 0))
+                    else:
+                        gdat_arr = gdat_arr[:, 1:]
+            except IOError:
                 if cdat_arr is None:
-                    cdat_arr = numpy.ndarray((len(gdat_arr), 0))
-                else:
-                    gdat_arr = gdat_arr[:, 1:]
-        except IOError:
-            if cdat_arr is None:
-                raise BngInterfaceError('Need at least one of .cdat file or '
-                                        '.gdat file to read simulation '
-                                        'results')
-            gdat_arr = numpy.ndarray((len(cdat_arr), 0))
+                    raise BngInterfaceError('Need at least one of .cdat file or '
+                                            '.gdat file to read simulation '
+                                            'results')
+                gdat_arr = numpy.ndarray((len(cdat_arr), 0))
 
-        yfull_dtype = list(zip(names, itertools.repeat(float)))
-        yfull = numpy.ndarray(len(cdat_arr), yfull_dtype)
+            yfull_dtype = list(zip(names, itertools.repeat(float)))
+            yfull = numpy.ndarray(len(cdat_arr), yfull_dtype)
 
-        yfull_view = yfull.view(float).reshape(len(yfull), -1)
-        yfull_view[:, :cdat_arr.shape[1]] = cdat_arr
-        yfull_view[:, cdat_arr.shape[1]:] = gdat_arr
+            yfull_view = yfull.view(float).reshape(len(yfull), -1)
+            yfull_view[:, :cdat_arr.shape[1]] = cdat_arr
+            yfull_view[:, cdat_arr.shape[1]:] = gdat_arr
 
-        return yfull
+            list_of_yfulls.append(yfull)
+
+        return list_of_yfulls
 
 
 class BngConsole(BngBaseInterface):
     """ Interact with BioNetGen through BNG Console """
     def __init__(self, model=None, verbose=False, cleanup=True,
                  output_dir=None, output_prefix=None, timeout=30,
-                 suppress_warnings=False):
-        super(BngConsole, self).__init__(model, verbose, cleanup,
-                                         output_prefix, output_dir)
+                 suppress_warnings=False, model_additional_species=None):
+        super(BngConsole, self).__init__(
+            model, verbose, cleanup, output_prefix, output_dir,
+            model_additional_species=model_additional_species
+        )
 
         try:
             import pexpect
@@ -334,7 +366,7 @@ class BngConsole(BngBaseInterface):
 
     def load_bngl(self, bngl_file):
         """
-        Loads a BNGL file in the BNG console
+        Load a BNGL file in the BNG console
 
         Parameters
         ----------
@@ -350,9 +382,12 @@ class BngConsole(BngBaseInterface):
 
 class BngFileInterface(BngBaseInterface):
     def __init__(self, model=None, verbose=False, output_dir=None,
-                 output_prefix=None, cleanup=True):
-        super(BngFileInterface, self).__init__(model, verbose, cleanup,
-                                               output_prefix, output_dir)
+                 output_prefix=None, cleanup=True,
+                 model_additional_species=None):
+        super(BngFileInterface, self).__init__(
+            model, verbose, cleanup, output_prefix, output_dir,
+            model_additional_species=model_additional_species
+        )
         self._init_command_queue()
 
     def _init_command_queue(self):
@@ -386,6 +421,7 @@ class BngFileInterface(BngBaseInterface):
         """
         self.command_queue.write('end actions\n')
         bng_commands = self.command_queue.getvalue()
+
         try:
             # Generate BNGL file
             with open(self.bng_filename, 'w') as bng_file:
@@ -409,10 +445,12 @@ class BngFileInterface(BngBaseInterface):
                                  cwd=self.base_directory,
                                  stdout=subprocess.PIPE,
                                  stderr=subprocess.PIPE)
+            if self.verbose <= logging.DEBUG:
+                for line in iter(p.stdout.readline, b''):
+                    self._logger.debug(line[:-1])
             (p_out, p_err) = p.communicate()
             p_out = p_out.decode('utf-8')
             p_err = p_err.decode('utf-8')
-            self._logger.log(EXTENDED_DEBUG, 'BNG output:\n\n' + p_out)
             if p.returncode:
                 raise BngInterfaceError(p_out.rstrip("at line") + "\n" +
                                         p_err.rstrip())
@@ -434,9 +472,44 @@ class BngFileInterface(BngBaseInterface):
         action_args = self._format_action_args(**kwargs)
 
         # Add the command to the queue
-        self.command_queue.write('\t%s({%s})\n' % (action, action_args))
+        if action_args == '':
+            self.command_queue.write('\t%s()\n' % action)
+        else:
+            self.command_queue.write('\t%s({%s})\n' % (action, action_args))
 
         return
+
+    def set_parameter(self, name, value):
+        """
+        Generates a BNG action command and adds it to the command queue
+
+        Parameters
+        ----------
+        name: string
+            The name of the parameter to set
+        value: float-like
+            Value of parameter
+
+        """
+        self.command_queue.write('\tsetParameter("%s", %f)\n' % (name, value))
+
+    def set_concentration(self, cplx_pat, value):
+        """
+        Generates a BNG action command and adds it to the command queue
+
+        Parameters
+        ----------
+        cplx_pat: pysb.ComplexPattern
+            Species ComplexPattern
+        value: float-like
+            Initial concentration
+
+        """
+        formatted_name = format_complexpattern(
+            pysb.core.as_complex_pattern(cplx_pat)
+        )
+        self.command_queue.write('\tsetConcentration("%s", %f)\n' % (
+            formatted_name, value))
 
 
 def run_ssa(model, t_end=10, n_steps=100, param_values=None, output_dir=None,
@@ -551,6 +624,23 @@ def generate_network(model, cleanup=True, append_stdout=False, verbose=False):
         output = bngfile.read_netfile()
 
     return output
+
+
+def load_equations(model, netfile):
+    """
+    Load model equations from a specified netfile
+
+    Parameters
+    ----------
+    model: pysb.Model
+        PySB model file
+    netfile: str
+        BNG netfile
+    """
+    if model.odes:
+        return
+    with open(netfile, 'r') as f:
+        _parse_netfile(model, iter(f.readlines()))
 
 
 def generate_equations(model, cleanup=True, verbose=False):
