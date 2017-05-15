@@ -223,7 +223,7 @@ class StochKitExporter(Exporter):
             # expand expressions
             for e in self.model.expressions:
                 rate = re.sub(r'\b%s\b' % e.name,
-                              '(%s)' % sympy.ccode(e.expand_expr(self.model)),
+                              '(%s)' % sympy.ccode(e.expand_expr()),
                               rate)
             # replace observables w/ sums of species
             for obs in self.model.observables:
