@@ -418,10 +418,6 @@ class Simulator(object):
                     "len(model.species).\n"
                     "initials.shape: " + str(self.initials.shape) +
                     "\nlen(model.species): %d" % len(self._model.species))
-            # NOTE: Not sure if the check on 'initials' should be here or not.
-            # Network-free simulators don't have species, but we will want to
-            # allow users to supply initials. Right now, that will raise an
-            # exception. Need to think about this. --LAH
 
     @abstractmethod
     def run(self, tspan=None, initials=None, param_values=None):
