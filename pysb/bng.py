@@ -53,7 +53,8 @@ class BngBaseInterface(object):
     @abc.abstractmethod
     def __init__(self, model=None, verbose=False, cleanup=False,
                  output_prefix=None, output_dir=None,
-                 model_additional_species=None):
+                 model_additional_species=None,
+                 model_population_maps=None):
         self._logger = get_logger(__name__,
                                   model=model,
                                   log_level=verbose)
@@ -67,7 +68,8 @@ class BngBaseInterface(object):
             output_prefix
         if model:
             self.generator = BngGenerator(
-                model, additional_initials=model_additional_species
+                model, additional_initials=model_additional_species,
+                population_maps=model_population_maps
             )
             self.model = self.generator.model
             self._check_model()
@@ -77,6 +79,9 @@ class BngBaseInterface(object):
 
         self.base_directory = tempfile.mkdtemp(prefix=self.output_prefix,
                                                dir=output_dir)
+        self._logger.debug('{} instantiated in directory {}'.format(
+            self.__class__, self.base_directory)
+        )
 
     def __enter__(self):
         return self
@@ -382,10 +387,12 @@ class BngConsole(BngBaseInterface):
 class BngFileInterface(BngBaseInterface):
     def __init__(self, model=None, verbose=False, output_dir=None,
                  output_prefix=None, cleanup=True,
-                 model_additional_species=None):
+                 model_additional_species=None,
+                 model_population_maps=None):
         super(BngFileInterface, self).__init__(
             model, verbose, cleanup, output_prefix, output_dir,
-            model_additional_species=model_additional_species
+            model_additional_species=model_additional_species,
+            model_population_maps=model_population_maps
         )
         self._init_command_queue()
 
@@ -406,17 +413,23 @@ class BngFileInterface(BngBaseInterface):
         if self.cleanup:
             self._delete_tmpdir()
 
-    def execute(self, reload_netfile=False):
+    def execute(self, reload_netfile=False, skip_file_actions=True):
         """
         Executes all BNG commands in the command queue.
 
         Parameters
         ----------
-        reload_netfile: bool
+        reload_netfile: bool or str
             If true, attempts to reload an existing .net file from a
-            previous execute() iteration. This is useful for running
-            multiple actions in a row, where results need to be read
-            into PySB before a new series of actions is executed.
+            previous execute() iteration. If a string, the filename
+            specified in the string is supplied to BNG's readFile (which can be
+            any file type BNG supports, such as .net or .bngl).
+            This is useful for running multiple actions in a row,
+            where results need to be read into PySB before a new series of
+            actions is executed.
+        skip_file_actions: bool
+            Only used if the previous argument is not False. Set this
+            argument to True to ignore any actions block in the loaded file.
         """
         self.command_queue.write('end actions\n')
         bng_commands = self.command_queue.getvalue()
@@ -425,12 +438,14 @@ class BngFileInterface(BngBaseInterface):
             # Generate BNGL file
             with open(self.bng_filename, 'w') as bng_file:
                 output = ''
-                if reload_netfile:
-                    bng_commands = bng_commands.replace('begin actions\n',
-                                         'begin actions\n\treadFile({'
-                                         'file=>"%s"});\n' % self.net_filename)
-                elif self.model:
+                if self.model and not reload_netfile:
                     output += self.generator.get_content()
+                if reload_netfile:
+                    filename = reload_netfile if \
+                        isinstance(reload_netfile, (str, unicode)) \
+                        else self.net_filename
+                    output += '\n  readFile({file=>"%s",skip_actions=>%d})\n' \
+                        % (filename, int(skip_file_actions))
                 output += bng_commands
                 self._logger.debug('BNG command file contents:\n\n' + output)
                 bng_file.write(output)
@@ -490,7 +505,7 @@ class BngFileInterface(BngBaseInterface):
             Value of parameter
 
         """
-        self.command_queue.write('\tsetParameter("%s", %f)\n' % (name, value))
+        self.command_queue.write('\tsetParameter("%s", %g)\n' % (name, value))
 
     def set_concentration(self, cplx_pat, value):
         """
@@ -498,17 +513,37 @@ class BngFileInterface(BngBaseInterface):
 
         Parameters
         ----------
-        cplx_pat: pysb.ComplexPattern
-            Species ComplexPattern
+        cplx_pat: pysb.ComplexPattern or string
+            Species ComplexPattern, or a BNG format string representation
         value: float-like
             Initial concentration
 
         """
-        formatted_name = format_complexpattern(
-            pysb.core.as_complex_pattern(cplx_pat)
-        )
-        self.command_queue.write('\tsetConcentration("%s", %f)\n' % (
+        if isinstance(cplx_pat, (str, unicode)):
+            formatted_name = cplx_pat
+        else:
+            formatted_name = format_complexpattern(
+                pysb.core.as_complex_pattern(cplx_pat)
+            )
+        self.command_queue.write('\tsetConcentration("%s", %g)\n' % (
             formatted_name, value))
+
+
+def generate_hybrid_model(model, population_maps, additional_species=None,
+                          safe=False, verbose=False, output_dir=None,
+                          output_prefix=None, cleanup=True):
+    with BngFileInterface(model,
+                          output_dir=output_dir,
+                          output_prefix=output_prefix,
+                          cleanup=cleanup,
+                          model_additional_species=additional_species,
+                          model_population_maps=population_maps) as bng:
+        bng.action('generate_hybrid_model', verbose=verbose, safe=safe,
+                   suffix='hpp')
+        bng.execute()
+
+        with open(bng.base_filename + '_hpp.bngl', 'r') as f:
+            return f.read()
 
 
 def run_ssa(model, t_end=10, n_steps=100, param_values=None, output_dir=None,
