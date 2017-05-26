@@ -596,8 +596,10 @@ class SimulationResult(object):
                                     '%s names not allowed' % name_type
                         raise ValueError(error_msg)
 
-        yobs_dtype = zip(obs_names, itertools.repeat(float))
-        yexpr_dtype = zip(expr_names, itertools.repeat(float))
+        yobs_dtype = zip(obs_names, itertools.repeat(float)) if obs_names \
+            else float
+        yexpr_dtype = zip(expr_names, itertools.repeat(float)) if expr_names \
+            else float
 
         if observables_and_expressions is not None and len(
                 observables_and_expressions) > 0:
@@ -609,10 +611,10 @@ class SimulationResult(object):
                 self._model.observables)):] for n in range(self.nsims)]
 
             self._yobs = [self._yobs_view[n].reshape(
-                len(tout[n]) * len(yobs_dtype)).view(dtype=yobs_dtype) for n
+                len(tout[n]) * len(obs_names)).view(dtype=yobs_dtype) for n
                           in range(self.nsims)]
             self._yexpr = [self._yexpr_view[n].reshape(
-                len(tout[n]) * len(yexpr_dtype)).view(dtype=yexpr_dtype) for n
+                len(tout[n]) * len(expr_names)).view(dtype=yexpr_dtype) for n
                           in range(self.nsims)]
         else:
             self._yobs = [np.ndarray((len(self.tout[n]),),
