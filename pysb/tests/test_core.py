@@ -175,3 +175,12 @@ def test_complex_pattern_equivalence_compartments():
     # Check that enable_synth_deg is idempotent
     model.enable_synth_deg()
     assert len(model.initial_conditions) == 2
+    
+@with_model
+def test_complex_pattern_equivalence_different_bond_numbers():
+    Monomer('A', ['b', 'c'], {'b' : ['U', 'P']})
+    Monomer('B', ['a'])
+    cp0 = A(b=('U', 1), c=2) % A(b='P', c=1) % B(a=2)
+    cp1 = A(b='P', c=5) % B(a=3) % A(b=('U', 5), c=3)
+    _check_pattern_equivalence([cp0, cp1])
+

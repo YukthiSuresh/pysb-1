@@ -530,19 +530,57 @@ class ComplexPattern(object):
             warnings.warn("is_equivalent_to() will only work with concrete "
                           "patterns in a future version", DeprecationWarning)
 
-        # FIXME the literal site_conditions comparison requires bond numbering
-        # to be identical, so some sort of canonicalization of that
-        # numbering is necessary.
+        # Check that the other pattern is also a ComplexPattern
         if not isinstance(other, ComplexPattern):
             raise Exception("Can only compare ComplexPattern to another "
                             "ComplexPattern")
+ 
+        def _renumber_bonds(cp):
+            site_dict = {} 
+            bond_dict = {} 
+            bond_num = 0
+            # sort monomer patterns alphabetically
+            for mp in sorted(cp.monomer_patterns, key=str):
+                site_dict[mp] = { k:v for k,v in mp.site_conditions.items() }
+                for item in site_dict[mp].items():
+                    # check if this is a bond 
+                    if isinstance(item[1], int):
+                        # store the bond number if it hasn't been seen yet
+                        if bond_dict.get(item[1]) is None:
+                            bond_dict[item[1]] = bond_num 
+                            bond_num += 1 
+                        site_dict[mp][item[0]] = bond_dict[item[1]]
+                    # check if this is a (state,bond) tuple
+                    if isinstance(item[1], tuple):
+                        # store the bond number if it hasn't been seen yet
+                        if bond_dict.get(item[1][1]) is None:
+                            bond_dict[item[1][1]] = bond_num
+                            bond_num += 1 
+                        site_dict[mp][item[0]] = (item[1][0], bond_dict[item[1][1]])
+            return site_dict
+
+        # Check if the number of monomers are the same in both complexes
+        if len(self.monomer_patterns) != len(other.monomer_patterns):
+            return False
+        
+        # Check if the monomers are the same in both complexes
+        if [repr(mp.monomer) for mp in sorted(self.monomer_patterns, key=str)] != \
+            [repr(mp.monomer) for mp in sorted(other.monomer_patterns, key=str)]:
+            return False
+        
+        # Renumber the bonds and check if the complexes are equivalent
+        self_site_dict = _renumber_bonds(self)
+        other_site_dict = _renumber_bonds(other)        
         mp_order = lambda mp: (mp[0], mp[1].keys(), mp[2])
-        return (sorted([(repr(mp.monomer), mp.site_conditions,
+        
+        return (sorted([(repr(mp.monomer), self_site_dict[mp],
                          mp.compartment or self.compartment)
-                       for mp in self.monomer_patterns], key=mp_order) ==
-                sorted([(repr(mp.monomer), mp.site_conditions,
+                       for mp in sorted(self.monomer_patterns, key=str)], 
+                       key=mp_order) ==
+                sorted([(repr(mp.monomer), other_site_dict[mp],
                          mp.compartment or other.compartment)
-                       for mp in other.monomer_patterns], key=mp_order))
+                       for mp in sorted(other.monomer_patterns, key=str)], 
+                       key=mp_order))
 
     def copy(self):
         """
