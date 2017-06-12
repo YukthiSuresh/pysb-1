@@ -1,6 +1,9 @@
 from pysb.testing import *
 from pysb import *
 from pysb.bng import *
+from nose.plugins.skip import SkipTest
+import os
+
 
 @with_model
 def test_generate_network():
@@ -14,8 +17,11 @@ def test_generate_network():
     Rule('degrade', A() >> None, k)
     ok_(generate_network(model))
 
+
 @with_model
 def test_simulate_network_console():
+    if os.name == 'nt':
+        raise SkipTest('BNG Console does not work on Windows')
     Monomer('A')
     Parameter('A_0', 1)
     Initial(A(), A_0)
@@ -25,6 +31,7 @@ def test_simulate_network_console():
     with BngConsole(model, suppress_warnings=True) as bng:
         bng.generate_network(overwrite=True)
         bng.action('simulate', method='ssa', t_end=20000, n_steps=100)
+
 
 @with_model
 def test_sequential_simulations():
@@ -47,6 +54,7 @@ def test_sequential_simulations():
         yfull2 = bng.read_simulation_results()
         ok_(yfull2.size == 51)
 
+
 @with_model
 def test_compartment_species_equivalence():
     Parameter('p', 1)
@@ -60,6 +68,7 @@ def test_compartment_species_equivalence():
     for i, (cp, param) in enumerate(model.initial_conditions):
         ok_(cp.is_equivalent_to(model.species[i]))
     ok_(model.species[2].is_equivalent_to(Q(x=1) ** C % R(y=1) ** C))
+
 
 @with_model
 def test_bidirectional_rules_collapse():
@@ -76,6 +85,7 @@ def test_bidirectional_rules_collapse():
     ok_(len(model.reactions_bidirectional[0]['rule']) == 3)
     ok_(model.reactions_bidirectional[0]['reversible'])
 
+
 @with_model
 def test_bidirectional_rules():
     Monomer('A')
@@ -91,6 +101,7 @@ def test_bidirectional_rules():
     ok_(model.reactions_bidirectional[0]['reversible'])
     #TODO Check that 'rate' has 4 terms
 
+
 @with_model
 def test_zero_order_synth_no_initials():
     Monomer('A')
@@ -99,10 +110,51 @@ def test_zero_order_synth_no_initials():
     Rule('Rule2', A() <> B(), Parameter('kf', 10), Parameter('kr', 1))
     generate_equations(model)
 
+
+@with_model
+def test_nfsim():
+    Monomer('A', ['a'])
+    Monomer('B', ['b'])
+
+    Parameter('ksynthA', 100)
+    Parameter('ksynthB', 100)
+    Parameter('kbindAB', 100)
+
+    Parameter('A_init', 20)
+    Parameter('B_init', 30)
+
+    Initial(A(a=None), A_init)
+    Initial(B(b=None), B_init)
+
+    Observable("A_free", A(a=None))
+    Observable("B_free", B(b=None))
+    Observable("AB_complex", A(a=1) % B(b=1))
+
+    Rule('A_synth', None >> A(a=None), ksynthA)
+    Rule('B_synth', None >> B(b=None), ksynthB)
+    Rule('AB_bind', A(a=None) + B(b=None) >> A(a=1) % B(b=1), kbindAB)
+
+    with BngFileInterface(model) as bng:
+        bng.action('simulate', method='nf', t_end=1000, n_steps=100)
+        bng.execute()
+        res = bng.read_simulation_results()
+        assert res.dtype.names == ('time', 'A_free', 'B_free', 'AB_complex')
+        assert len(res) == 101
+
+
 @with_model
 def test_unicode_strs():
     Monomer(u'A', [u'b'], {u'b':[u'y', u'n']})
     Monomer(u'B')
     Rule(u'rule1', A(b=u'y') >> B(), Parameter(u'k', 1))
     Initial(A(b=u'y'), Parameter(u'A_0', 100))
+    generate_equations(model)
+
+
+@with_model
+def test_sympy_parameter_keyword():
+    Monomer('A')
+    Initial(A(), Parameter('A_0', 100))
+    Parameter('deg', 10)  # deg is a sympy function
+    Rule('Rule1', A() >> None, deg)
     generate_equations(model)

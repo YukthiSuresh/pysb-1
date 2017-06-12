@@ -13,7 +13,7 @@ import abc
 from warnings import warn
 import shutil
 import collections
-
+import pysb.pathfinder as pf
 try:
     from cStringIO import StringIO
 except ImportError:
@@ -29,73 +29,13 @@ try:
 except NameError:
     basestring = str
 
-# Cached value of BNG path
-_bng_path = None
 
 def set_bng_path(dir):
-    global _bng_path
-    _bng_path = os.path.join(dir,'BNG2.pl')
-    # Make sure file exists and that it is not a directory
-    if not os.access(_bng_path, os.F_OK) or not os.path.isfile(_bng_path):
-        raise Exception('Could not find BNG2.pl in ' + os.path.abspath(dir) + '.')
-    # Make sure file has executable permissions
-    elif not os.access(_bng_path, os.X_OK):
-        raise Exception("BNG2.pl in " + os.path.abspath(dir) + " does not have executable permissions.")
-
-def _get_bng_path():
-    """
-    Return the path to BioNetGen's BNG2.pl.
-
-    Looks for a BNG distribution at the path stored in the BNGPATH environment
-    variable if that's set, or else in a few hard-coded standard locations.
-
-    """
-
-    global _bng_path
-
-    # Just return cached value if it's available
-    if _bng_path:
-        return _bng_path
-
-    path_var = 'BNGPATH'
-    dist_dirs = [
-        '/usr/local/share/BioNetGen',
-        'c:/Program Files/BioNetGen',
-        ]
-    # BNG 2.1.8 moved BNG2.pl up out of the Perl2 subdirectory, so to be more
-    # compatible we check both the old and new locations.
-    script_subdirs = ['', 'Perl2']
-
-    def check_dist_dir(dist_dir):
-        # Return the full path to BNG2.pl inside a BioNetGen distribution
-        # directory, or False if directory does not contain a BNG2.pl in one of
-        # the expected places.
-        for subdir in script_subdirs:
-            script_path = os.path.join(dist_dir, subdir, 'BNG2.pl')
-            if os.access(script_path, os.F_OK):
-                return script_path
-        else:
-            return False
-
-    # First check the environment variable, which has the highest precedence
-    if path_var in os.environ:
-        script_path = check_dist_dir(os.environ[path_var])
-        if not script_path:
-            raise Exception('Environment variable %s is set but BNG2.pl could'
-                            ' not be found there' % path_var)
-    # If the environment variable isn't set, check the standard locations
-    else:
-        for dist_dir in dist_dirs:
-            script_path = check_dist_dir(dist_dir)
-            if script_path:
-                break
-        else:
-            raise Exception('Could not find BioNetGen installed in one of the '
-                            'following locations:' +
-                            ''.join('\n    ' + d for d in dist_dirs))
-    # Cache path for future use
-    _bng_path = script_path
-    return script_path
+    """ Deprecated. Use pysb.pathfinder.set_path() instead. """
+    warn("Function %s() is deprecated; use pysb.pathfinder.set_path() "
+         "instead" % set_bng_path.__name__, category=DeprecationWarning,
+         stacklevel=2)
+    pf.set_path('bng', dir)
 
 
 class BngInterfaceError(RuntimeError):
@@ -238,28 +178,48 @@ class BngBaseInterface(object):
         """
         Reads the results of a BNG simulation and parses them into a numpy
         array
+
+        Returns
+        -------
+        numpy.ndarray
+            Simulation results in a 2D matrix (time on Y axis,
+            species/observables/expressions on X axis depending on
+            simulation type)
         """
+        names = ['time']
+
         # Read concentrations data
-        cdat_arr = numpy.loadtxt(self.base_filename + '.cdat', skiprows=1)
+        try:
+            cdat_arr = numpy.loadtxt(self.base_filename + '.cdat', skiprows=1)
+            # -1 for time column
+            names += ['__s%d' % i for i in range(cdat_arr.shape[1] - 1)]
+        except IOError:
+            cdat_arr = None
+
         # Read groups data
-        if self.model and len(self.model.observables):
-            # Exclude first column (time)
-            gdat_arr = numpy.loadtxt(self.base_filename + '.gdat',
-                                     skiprows=1)[:,1:]
-        else:
+        try:
+            with open(self.base_filename + '.gdat', 'r') as f:
+                # Exclude \# and time column
+                names += f.readline().split()[2:]
+                # Exclude first column (time)
+                gdat_arr = numpy.loadtxt(f)
+                if cdat_arr is None:
+                    cdat_arr = numpy.ndarray((len(gdat_arr), 0))
+                else:
+                    gdat_arr = gdat_arr[:, 1:]
+        except IOError:
+            if cdat_arr is None:
+                raise BngInterfaceError('Need at least one of .cdat file or '
+                                        '.gdat file to read simulation '
+                                        'results')
             gdat_arr = numpy.ndarray((len(cdat_arr), 0))
 
-        # -1 for time column
-        names = ['time'] + ['__s%d' % i for i in range(cdat_arr.shape[1]-1)]
         yfull_dtype = list(zip(names, itertools.repeat(float)))
-        if self.model and len(self.model.observables):
-            yfull_dtype += list(zip(self.model.observables.keys(),
-                                    itertools.repeat(float)))
         yfull = numpy.ndarray(len(cdat_arr), yfull_dtype)
 
         yfull_view = yfull.view(float).reshape(len(yfull), -1)
-        yfull_view[:, :len(names)] = cdat_arr
-        yfull_view[:, len(names):] = gdat_arr
+        yfull_view[:, :cdat_arr.shape[1]] = cdat_arr
+        yfull_view[:, cdat_arr.shape[1]:] = gdat_arr
 
         return yfull
 
@@ -288,7 +248,8 @@ class BngConsole(BngBaseInterface):
                     bng_file.write(self.generator.get_content())
 
             # Start BNG Console and load BNGL
-            self.console = pexpect.spawn('perl %s --console' % _get_bng_path(),
+            self.console = pexpect.spawn('perl %s --console' %
+                                         pf.get_path('bng'),
                                          cwd=self.base_directory,
                                          timeout=timeout)
             self._console_wait()
@@ -421,7 +382,7 @@ class BngFileInterface(BngBaseInterface):
                     bng_commands = bng_commands.replace('begin actions\n',
                                          'begin actions\n\treadFile({'
                                          'file=>"%s"});\n' % self.net_filename)
-                else:
+                elif self.model:
                     bng_file.write(self.generator.get_content())
                 bng_file.write(bng_commands)
 
@@ -429,7 +390,8 @@ class BngFileInterface(BngBaseInterface):
             self.command_queue.close()
             self._init_command_queue()
 
-            p = subprocess.Popen(['perl', _get_bng_path(), self.bng_filename],
+            p = subprocess.Popen(['perl', pf.get_path('bng'),
+                                  self.bng_filename],
                                  cwd=self.base_directory,
                                  stdout=subprocess.PIPE,
                                  stderr=subprocess.PIPE)
@@ -689,7 +651,9 @@ def _parse_reaction(model, line):
     rule_name, is_reverse = zip(*[re.subn('^_reverse_|\(reverse\)$', '', r) for r in rule_list])
     is_reverse = tuple(bool(i) for i in is_reverse)
     r_names = ['__s%d' % r for r in reactants]
-    combined_rate = sympy.Mul(*[sympy.S(t) for t in r_names + rate])
+    rate_param = [model.parameters.get(r) or model.expressions.get(r) or
+                  float(r) for r in rate]
+    combined_rate = sympy.Mul(*[sympy.S(t) for t in r_names + rate_param])
     reaction = {
         'reactants': reactants,
         'products': products,

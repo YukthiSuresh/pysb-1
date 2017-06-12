@@ -13,6 +13,7 @@ import re
 import numpy as np
 import warnings
 import os
+from pysb.logging import EXTENDED_DEBUG
 
 
 def _exec(code, locals):
@@ -53,8 +54,11 @@ class ScipyOdeSimulator(Simulator):
         If passed as a dictionary, keys must be parameter names.
         If not specified, parameter values will be taken directly from
         model.parameters.
-    verbose : bool, optional (default: False)
-        Verbose output.
+    verbose : bool or int, optional (default: False)
+        Sets the verbosity level of the logger. See the logging levels and
+        constants from Python's logging module for interpretation of integer
+        values. False is equal to the PySB default level (currently WARNING),
+        True is equal to DEBUG.
     **kwargs : dict
         Extra keyword arguments, including:
 
@@ -347,7 +351,7 @@ class ScipyOdeSimulator(Simulator):
                                            param_values=param_values)
         n_sims = len(self.param_values)
         trajectories = np.ndarray((n_sims, len(self.tspan),
-                                  len(self._model.species)))
+                              len(self._model.species)))
         for n in range(n_sims):
             self._logger.info('Running simulation %d of %d', n + 1, n_sims)
             if self.integrator == 'lsoda':
@@ -368,8 +372,9 @@ class ScipyOdeSimulator(Simulator):
                 i = 1
                 while self.integrator.successful() and self.integrator.t < \
                         self.tspan[-1]:
-                    self._logger.debug('Simulation %d/%d Integrating t=%g',
-                                       n + 1, n_sims, self.integrator.t)
+                    self._logger.log(EXTENDED_DEBUG,
+                                     'Simulation %d/%d Integrating t=%g',
+                                     n + 1, n_sims, self.integrator.t)
                     trajectories[n][i] = self.integrator.integrate(self.tspan[i])
                     i += 1
                 if self.integrator.t < self.tspan[-1]:

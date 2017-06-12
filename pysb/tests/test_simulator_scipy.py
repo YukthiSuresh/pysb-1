@@ -1,4 +1,6 @@
 from pysb.testing import *
+import sys
+import copy
 import numpy as np
 from pysb import Monomer, Parameter, Initial, Observable, Rule, Expression
 from pysb.simulator import ScipyOdeSimulator, SimulatorException
@@ -171,6 +173,27 @@ class TestScipySimulatorMultiple(TestScipySimulatorBase):
         df = simres.dataframe
         all = simres.all
 
+    def test_param_values_dict(self):
+        param_values = {'A_init': [0, 100]}
+        initials = {self.model.monomers['B'](b=None): [250, 350]}
+
+        simres = self.sim.run(param_values=param_values)
+        print(simres.dataframe.loc[0, 0]['A_free'])
+        assert np.allclose(simres.dataframe.loc[(slice(None), 0.0), 'A_free'],
+                           [0, 100])
+
+        simres = self.sim.run(param_values={'B_init': [200, 300]})
+        assert np.allclose(simres.dataframe.loc[(slice(None), 0.0), 'A_free'],
+                           [0, 0])
+        assert np.allclose(simres.dataframe.loc[(slice(None), 0.0), 'B_free'],
+                           [200, 300])
+
+        simres = self.sim.run(initials=initials, param_values=param_values)
+        assert np.allclose(simres.dataframe.loc[(slice(None), 0.0), 'A_free'],
+                           [0, 100])
+        assert np.allclose(simres.dataframe.loc[(slice(None), 0.0), 'B_free'],
+                           [250, 350])
+
     @raises(SimulatorException)
     def test_initials_and_param_values_differing_lengths(self):
         initials = [[10, 20, 30, 40], [50, 60, 70, 80]]
@@ -214,6 +237,12 @@ def test_integrate_with_expression():
     assert np.allclose(keff_vals, 1.8181818181818182e-05)
 
 
+def test_set_initial_to_zero():
+    sim = ScipyOdeSimulator(robertson.model, tspan=np.linspace(0, 100))
+    simres = sim.run(initials={robertson.model.monomers['A'](): 0})
+    assert np.allclose(simres.observables['A_total'], 0)
+
+
 def test_robertson_integration():
     """Ensure robertson model simulates."""
     t = np.linspace(0, 100)
@@ -253,3 +282,48 @@ def test_nonexistent_integrator():
     """Ensure nonexistent integrator raises."""
     ScipyOdeSimulator(robertson.model, tspan=np.linspace(0, 1, 2),
                       integrator='does_not_exist')
+
+
+def test_unicode_obsname_ascii():
+    """Ensure ascii-convetible unicode observable names are handled."""
+    t = np.linspace(0, 100)
+    rob_copy = copy.deepcopy(robertson.model)
+    rob_copy.observables[0].name = u'A_total'
+    sim = ScipyOdeSimulator(rob_copy)
+    simres = sim.run(tspan=t)
+
+
+if sys.version_info[0] < 3:
+    @raises(ValueError)
+    def test_unicode_obsname_nonascii():
+        """Ensure non-ascii unicode observable names error in python 2."""
+        t = np.linspace(0, 100)
+        rob_copy = copy.deepcopy(robertson.model)
+        rob_copy.observables[0].name = u'A_total\u1234'
+        sim = ScipyOdeSimulator(rob_copy)
+        simres = sim.run(tspan=t)
+
+
+def test_unicode_exprname_ascii():
+    """Ensure ascii-convetible unicode expression names are handled."""
+    t = np.linspace(0, 100)
+    rob_copy = copy.deepcopy(robertson.model)
+    ab = rob_copy.observables['A_total'] + rob_copy.observables['B_total']
+    expr = Expression(u'A_plus_B', ab, _export=False)
+    rob_copy.add_component(expr)
+    sim = ScipyOdeSimulator(rob_copy)
+    simres = sim.run(tspan=t)
+
+
+if sys.version_info[0] < 3:
+    @raises(ValueError)
+    def test_unicode_exprname_nonascii():
+        """Ensure non-ascii unicode expression names error in python 2."""
+        t = np.linspace(0, 100)
+        rob_copy = copy.deepcopy(robertson.model)
+        ab = rob_copy.observables['A_total'] + rob_copy.observables['B_total']
+        expr = Expression(u'A_plus_B\u1234', ab, _export=False)
+        rob_copy.add_component(expr)
+        sim = ScipyOdeSimulator(rob_copy)
+        simres = sim.run(tspan=t)
+
