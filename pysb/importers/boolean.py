@@ -49,10 +49,11 @@ class BooleanTranslator(Builder):
     See :py:func:`model_from_boolean` for further details.
     """
     _supported_formats = ['BooleanNet']
-    _supported_modes = ['GSP','ROA','GA']
+    _supported_modes = ['GSP','ROA','GA','SYN']
     # GSP: Gillespie
     # ROA: Random-order asynchronous
     # GA:  General asynchronous    
+    # SYN: Synchronous
     
     def __init__(self, filename, format='BooleanNet', mode='GSP', force=False):
         super(BooleanTranslator, self).__init__()
@@ -65,14 +66,14 @@ class BooleanTranslator(Builder):
         self._parse_input_file(filename, format=format)
         # create monomers, initial conditions, and observables
         #~~~~~
-        if mode in ['ROA','GA']:
-            self.parameter('k_reset', 1e10)
-        if mode == 'ROA':
+        if mode in ['ROA','GA','SYN']:
+            self.parameter('k_reset', 1e10) 
             mon = self.monomer('RESET', ['reset'], {'reset' : ['N', 'Y']})
             mon_pat = MonomerPattern(mon, {'reset' : 'N'}, compartment=None)
             cpx_pat = ComplexPattern([mon_pat], compartment=None)
             self.initial(cpx_pat, self.parameter('RESET_init', 1))
-            roa_reset_pat = []
+        if mode in ['ROA','SYN']:
+            nfired_pat = []
         #~~~~~
         for name,state in self.initial_states.items():
             rank = self.function_ranks[name]
@@ -80,12 +81,17 @@ class BooleanTranslator(Builder):
             mon_sites = ['state']
             mon_site_states = {'state' : ['False','True']}
             #~~~~~
-            if mode in ['ROA','GA']:
+            if mode in ['ROA','GA','SYN']:
                 mon_sites.append('reset')
                 mon_site_states['reset'] = ['N', 'Y']
                 if rank > 1:
                     mon_sites.append('delay')
                     mon_site_states['delay'] = [str(i) for i in range(rank)]
+                if mode == 'SYN':
+                    mon_sites.append('copy')
+                    mon_site_states['copy'] = ['False','True','None']
+                    if rank > 1:
+                        mon_site_states['copy'].append('Delay')
             #~~~~~
             mon = self.monomer(name, mon_sites, mon_site_states)
             # create initial condition and observable for both 'False' and 'True' states
@@ -95,10 +101,12 @@ class BooleanTranslator(Builder):
                 cpx_pat = ComplexPattern([mon_pat], compartment=None)
                 self.observable('%s_%s_obs'%(name,s), cpx_pat)
                 #~~~~~
-                if mode in ['ROA','GA']:
+                if mode in ['ROA','GA','SYN']:
                     mon_pat_states = {'state' : s, 'reset' : 'N'}
                     if rank > 1:
                         mon_pat_states['delay'] = '0'
+                    if mode == 'SYN':
+                        mon_pat_states['copy'] = 'None'
                     mon_pat = MonomerPattern(mon, mon_pat_states, compartment=None)
                     cpx_pat = ComplexPattern([mon_pat], compartment=None)
                 #~~~~~
@@ -106,15 +114,16 @@ class BooleanTranslator(Builder):
                                      1 if s == state else 0)
                 self.initial(cpx_pat, par)
             #~~~~~
-            if mode == 'ROA':
-                mon_pat = MonomerPattern(mon, {'reset' : 'Y'}, compartment=None)
+            if mode in ['ROA','SYN']:
+                mon_pat_states = {'reset' : 'Y'}
+                mon_pat = MonomerPattern(mon, mon_pat_states, compartment=None)
                 cpx_pat = ComplexPattern([mon_pat], compartment=None)
-                roa_reset_pat.append(cpx_pat)
+                nfired_pat.append(cpx_pat)
             #~~~~~
         #~~~~~
-        if mode == 'ROA':
+        if mode in ['ROA','SYN']:
             # RESET(reset~N) <-> RESET(reset~Y)  1e10*if(N_FIRED>(N_NODES-0.5),1,0), 1e10*if(N_FIRED<0.5,1,0)
-            n_fired = self.observable('N_FIRED', ReactionPattern(roa_reset_pat))
+            n_fired = self.observable('N_FIRED', ReactionPattern(nfired_pat))
             n_nodes = self.parameter('N_NODES', len(self.initial_states.keys()))
             reset_mon = self.model.monomers['RESET']
             reset_reac = MonomerPattern(reset_mon, {'reset' : 'N'}, compartment=None)
@@ -478,8 +487,13 @@ class BooleanTranslator(Builder):
         rank = self.function_ranks[function_node]
         k_rate = 1./rank
         #~~~~~
-        if mode in ['ROA','GA']:
+        if mode in ['ROA','GA','SYN']:
             k_rate = 1.
+            reset_mon = self.model.monomers['RESET']
+            reset_pat_N = ComplexPattern([MonomerPattern(reset_mon, {'reset' : 'N'}, compartment=None)], 
+                                            compartment=None)
+            reset_pat_Y = ComplexPattern([MonomerPattern(reset_mon, {'reset' : 'Y'}, compartment=None)], 
+                                            compartment=None)
         #~~~~~
         rate_expr = self.parameter('k_rate_%s'%function_node, k_rate)
         paths = self._pathExpansion(root)
@@ -487,7 +501,7 @@ class BooleanTranslator(Builder):
         for p in paths:
             skip = False
             #~~~~~
-            if mode in ['ROA','GA']:
+            if mode in ['ROA','GA','SYN']:
                 clipped = False
             #~~~~~
             if function_node in p: # node update depends on itself
@@ -497,7 +511,7 @@ class BooleanTranslator(Builder):
                 else:
                     p = p[:idx] + p[idx+2:] # remove node + state
                     #~~~~~
-                    if mode in ['ROA','GA']:
+                    if mode in ['ROA','GA','SYN']:
                         clipped = True
                     #~~~~~
             if not skip:
@@ -507,11 +521,15 @@ class BooleanTranslator(Builder):
                 reac_states = {'state' : 'True'} if p[-1] == 'False' else {'state' : 'False'}
                 prod_states = {'state' : 'False'} if p[-1] == 'False' else {'state' : 'True'}
                 #~~~~~
-                if mode in ['ROA','GA']:
+                if mode in ['ROA','GA','SYN']:
                     if not clipped:
                         reac_states = {'state' : WILD}
                     reac_states['reset'] = 'N'
                     prod_states['reset'] = 'Y'
+                    if mode == 'SYN':
+                        reac_states['copy'] = 'None'
+                        prod_states['copy'] = prod_states['state']
+                        prod_states['state'] = reac_states['state']
                     if rank > 1:
                         reac_states['delay'] = str(rank-1)
                         prod_states['delay'] = '0'
@@ -531,36 +549,91 @@ class BooleanTranslator(Builder):
                         reactant_patterns.append(node_context)
                         product_patterns.append(node_context)
                     j = j + 2
+                #~~~~~
+                if mode in ['ROA','GA','SYN']:
+                    reactant_patterns.append(reset_pat_N)
+                    if mode in ['ROA','SYN']:
+                        product_patterns.append(reset_pat_N)
+                    else:
+                        product_patterns.append(reset_pat_Y)
+                #~~~~~
                 rule_expr = RuleExpression(ReactionPattern(reactant_patterns),
                                           ReactionPattern(product_patterns),
                                           is_reversible=False)
                 self.rule('%s_rule%d'%(function_node,n), rule_expr, rate_expr)
                 n = n + 1
         #~~~~~
-        # reset and delay rules
-        if mode in ['ROA','GA']:
-            # reset rule
+        # delay, copy, and reset rules
+        if mode in ['ROA','GA','SYN']:
             mon = self.model.monomers[function_node]
-            reac_pat = [ComplexPattern([MonomerPattern(mon, {'reset' : 'Y'}, compartment=None)], 
-                                      compartment=None)]
-            prod_pat = [ComplexPattern([MonomerPattern(mon, {'reset' : 'N'}, compartment=None)], 
-                                      compartment=None)]
-            if mode == 'ROA':            
-                mon_reset = self.model.monomers['RESET']
-                context_pat = ComplexPattern([MonomerPattern(mon_reset, {'reset' : 'Y'}, compartment=None)], 
-                                             compartment=None)
-                reac_pat.append(context_pat)
-                prod_pat.append(context_pat)
-            rule_expr = RuleExpression(ReactionPattern(reac_pat),
-                                          ReactionPattern(prod_pat),
-                                          is_reversible=False)
-            self.rule('%s_reset'%function_node, rule_expr, self.model.parameters['k_reset'])
             # delay rules
             for d in range(rank-1):
-                reac_pat = as_reaction_pattern(MonomerPattern(mon, {'delay' : str(d), 'reset' : 'N'}, compartment=None))
-                prod_pat = as_reaction_pattern(MonomerPattern(mon, {'delay' : str(d+1), 'reset' : 'Y'}, compartment=None))
-                rule_expr = RuleExpression(reac_pat, prod_pat, is_reversible=False)
+                reac_pat_states = {'delay' : str(d), 'reset' : 'N'}
+                prod_pat_states = {'delay' : str(d+1), 'reset' : 'Y'}
+                if mode == 'SYN':
+                    reac_pat_states['copy'] = 'None'
+                    prod_pat_states['copy'] = 'Delay'
+                reac_pat = [ComplexPattern([MonomerPattern(mon, reac_pat_states, compartment=None)],
+                                          compartment=None)]
+                prod_pat = [ComplexPattern([MonomerPattern(mon, prod_pat_states, compartment=None)],
+                                           compartment=None)]
+                reac_pat.append(reset_pat_N)
+                if mode in ['ROA','SYN']:
+                    prod_pat.append(reset_pat_N)
+                else:
+                    prod_pat.append(reset_pat_Y)
+                rule_expr = RuleExpression(ReactionPattern(reac_pat),
+                                           ReactionPattern(prod_pat),
+                                           is_reversible=False)
                 self.rule('%s_delay_%d_%d'%(function_node,d,d+1), rule_expr, rate_expr)
+            # copy rules
+            if mode == 'SYN':
+                mon = self.model.monomers[function_node]
+                for s in ['False','True']:
+                    reac_pat_states = {'state' : WILD, 'reset' : 'Y', 'copy' : s}
+                    prod_pat_states = {'state' : s, 'reset' : 'Y', 'copy' : 'None'}
+                    reac_pat = [ComplexPattern([MonomerPattern(mon, reac_pat_states, compartment=None)], 
+                                              compartment=None)]
+                    prod_pat = [ComplexPattern([MonomerPattern(mon, prod_pat_states, compartment=None)], 
+                                              compartment=None)]
+                    reac_pat.append(reset_pat_Y)
+                    prod_pat.append(reset_pat_Y)
+                    rule_expr = RuleExpression(ReactionPattern(reac_pat),
+                                               ReactionPattern(prod_pat),
+                                               is_reversible=False)
+                    self.rule('%s_copy_%s'%(function_node,s), rule_expr, self.model.parameters['k_reset'])
+                # need a copy rule for delays to ensure that in each round three rules fire (state change, copy, reset) 
+                # for each species node (other than RESET)
+                if rank > 1:
+                    reac_pat = [ComplexPattern([MonomerPattern(mon, {'reset' : 'Y', 'copy' : 'Delay'}, compartment=None)],
+                                               compartment=None)]
+                    prod_pat = [ComplexPattern([MonomerPattern(mon, {'reset' : 'Y', 'copy' : 'None'}, compartment=None)],
+                                               compartment=None)]
+                    reac_pat.append(reset_pat_Y)
+                    prod_pat.append(reset_pat_Y)
+                    rule_expr = RuleExpression(ReactionPattern(reac_pat),
+                                               ReactionPattern(prod_pat),
+                                               is_reversible=False)
+                    self.rule('%s_copy_Delay'%function_node, rule_expr, self.model.parameters['k_reset'])
+            # reset rule(s)    
+            reac_pat_states = {'reset' : 'Y'}
+            prod_pat_states = {'reset' : 'N'}
+            if mode == 'SYN':
+                reac_pat_states['copy'] = 'None'
+                prod_pat_states['copy'] = 'None'
+            reac_pat = [ComplexPattern([MonomerPattern(mon, reac_pat_states, compartment=None)], 
+                                      compartment=None)]
+            prod_pat = [ComplexPattern([MonomerPattern(mon, prod_pat_states, compartment=None)], 
+                                      compartment=None)]
+            reac_pat.append(reset_pat_Y)
+            if mode in ['ROA','SYN']:
+                prod_pat.append(reset_pat_Y)
+            else:
+                prod_pat.append(reset_pat_N)
+            rule_expr = RuleExpression(ReactionPattern(reac_pat),
+                                       ReactionPattern(prod_pat),
+                                       is_reversible=False)
+            self.rule('%s_reset'%function_node, rule_expr, self.model.parameters['k_reset'])
         #~~~~~
     
     def _grove(self, functions, function_nodes): 
