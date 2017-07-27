@@ -97,7 +97,7 @@ def simulate(sim_class_name, init_kwargs, run_kwargs_list,
         Name of a Simulator class, e.g. 'ScipyOdeSimulator'
     init_kwargs: dict
         Dictionary of keyword arguments to the Simulator constructor
-    run_kwargs_list: dict
+    run_kwargs_list: list of dict
         List of dictionaries of keyword arguments to the Simulator run()
         method, one for each set of simulations
     save_location: str
