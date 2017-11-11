@@ -23,6 +23,7 @@ import tempfile
 import shutil
 import warnings
 from collections import namedtuple
+import zipfile
 
 try:
     from future_builtins import zip
@@ -64,7 +65,8 @@ SimulationResult = namedtuple('SimulationResult',
 
 def run_simulation(model, time=10000, points=200, cleanup=True,
                    output_prefix=None, output_dir=None, flux_map=False,
-                   perturbation=None, seed=None, verbose=False):
+                   perturbation=None, seed=None, verbose=False,
+                   din_zip_file=False, din_flux_segments=50):
     """Runs the given model using KaSim and returns the parsed results.
 
     Parameters
@@ -107,6 +109,14 @@ def run_simulation(model, time=10000, points=200, cleanup=True,
         deterministic behaviour (e.g. for testing)
     verbose : boolean
         Whether to pass the output of KaSim through to stdout/stderr.
+    din_zip_file : boolean
+        Output rule flux data in discrete time segments. These data can be
+        used to view a dynamic influence network (DIN) using the viewer at
+        https://creativecodinglab.github.io/DynamicInfluenceNetworks. You'll
+        need to set cleanup to False to retrieve the zip file.
+    din_flux_segments : integer
+        The number of time segments to use in the above dynamic influence
+        network data (default 50).
 
     Returns
     -------
@@ -140,6 +150,7 @@ def run_simulation(model, time=10000, points=200, cleanup=True,
     kappa_filename = base_filename + '.ka'
     fm_filename = base_filename + '_fm.dot'
     out_filename = base_filename + '.out'
+    din_zip_filename = base_filename + '_din.zip'
 
     if points == 0:
         raise ValueError('The number of data points cannot be zero.')
@@ -160,6 +171,19 @@ def run_simulation(model, time=10000, points=200, cleanup=True,
         if flux_map:
             kappa_file.write('%%mod: [true] do $FLUX "%s" [true]\n' %
                              fm_filename)
+        if din_zip_file:
+            tspan = np.linspace(0, time, din_flux_segments + 2)
+            kappa_file.write('%mod: [true] do $FLUX "flux_0.json" ['
+                             'true]\n')
+            for i in range(din_flux_segments):
+                kappa_file.write(
+                    '%%mod: [T]>%e do $FLUX "flux_%d.json" [false]\n'
+                    % (tspan[i+1], i))
+
+                kappa_file.write(
+                    '%%mod: [T]>%e do $FLUX "flux_%d.json" [true]\n'
+                    % (tspan[i+1], i + 1))
+
         # If any perturbation language code has been passed in, add it to
         # the Kappa file:
         if perturbation:
@@ -199,6 +223,16 @@ def run_simulation(model, time=10000, points=200, cleanup=True,
                         "object returned (returning None); flux map "
                         "dot file available at %s" % fm_filename)
                 flux_graph = None
+
+    if din_zip_file:
+        with zipfile.ZipFile(din_zip_filename, 'w') as z:
+            for i in range(din_flux_segments):
+                z.write(os.path.join(base_directory, 'flux_%d.json' % i))
+            z.write(out_filename, arcname='observables.csv')
+
+        if verbose:
+            print('Dynamic interaction network data are saved as %s' %
+                  din_zip_filename)
 
     if cleanup:
         shutil.rmtree(base_directory)
