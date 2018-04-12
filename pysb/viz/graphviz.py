@@ -55,12 +55,14 @@ as a "modifier" (enzyme or catalyst).
 """
 
 from __future__ import print_function
-import sys
+
 import os
 import re
-import pysb.bng
+import sys
+
 import pydot
 
+import pysb.bng
 
 # Alias basestring under Python 3 for forwards compatibility
 try:
@@ -69,7 +71,7 @@ except NameError:
     basestring = str
 
 
-def run_render_species(model, save_name=None):
+def run_render_species(model, save_name=None, to_string=False):
     """
     Render the species from a model into the "dot" graph format.
 
@@ -79,6 +81,8 @@ def run_render_species(model, save_name=None):
         The model to render.
     save_name : str, optional
         Will render and save an image to png with name provided
+    to_string: bool
+
     Returns
     -------
     string
@@ -86,18 +90,23 @@ def run_render_species(model, save_name=None):
     """
 
     pysb.bng.generate_equations(model)
-    # return render_species_as_dot(model.species, model.name)
-    return render_species(model.species, model.name, save_name
-                          ).create(prog='dot', format='dot')
+    if to_string:
+        return render_species(model.species, model.name, save_name
+                              ).create(prog='dot', format='dot')
+    else:
+        return render_species(model.species, model.name, save_name)
 
 
-def run_render_reactions(model, save_name=None):
-    pysb.bng.generate_equations(model)
-    # return render_species_as_dot(model.species, model.name)
-    return render_reactions(model, save_name).create(prog='dot', format='dot')
+def run_render_reactions(model, save_name=None, to_string=False):
+    if to_string:
+        return render_reactions(model, save_name).create(prog='dot',
+                                                         format='dot')
+    else:
+        return render_reactions(model, save_name)
 
 
 def render_species(species_list, graph_name="", save_name=None):
+
     graph = pydot.Dot(graph_name="{} species".format(graph_name),
                       graph_type='digraph', rankdir="LR", fontname='Arial',
                       dpi=200)
@@ -252,11 +261,13 @@ if __name__ == '__main__':
         exit()
     model_filename = sys.argv[2]
     if len(sys.argv) == 4:
-        save_name = sys.argv[3]
+        s_name = sys.argv[3]
     else:
-        save_name = None
-    print(save_name)
-    print(sys.argv)
+        s_name = None
+    if s_name is None:
+        to_string = True
+    else:
+        to_string = False
     if not os.path.exists(model_filename):
         raise Exception("File '%s' doesn't exist" % model_filename)
     if not re.search(r'\.py$', model_filename):
@@ -274,14 +285,16 @@ if __name__ == '__main__':
         raise
     # grab the 'model' variable from the module
     try:
-        model = model_module.__dict__['model']
+        loc_model = model_module.__dict__['model']
     except KeyError:
         raise Exception("File '%s' isn't a model file" % model_filename)
 
     if sys.argv[1] == 'render_reactions':
-        print(run_render_reactions(model, save_name=save_name))
+        print(run_render_reactions(loc_model, save_name=s_name,
+                                   to_string=to_string))
     elif sys.argv[1] == 'render_species':
-        print(run_render_species(model, save_name=save_name))
+        print(run_render_species(loc_model, save_name=s_name,
+                                 to_string=to_string))
     else:
         print(usage, end=' ')
         exit()
