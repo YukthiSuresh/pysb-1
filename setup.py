@@ -26,7 +26,7 @@ def main():
           # We should really specify some minimum versions here.
           install_requires=['numpy', 'scipy', 'sympy', 'networkx'],
           setup_requires=['nose'],
-          tests_require=['coverage', 'pygraphviz', 'matplotlib', 'pexpect',
+          tests_require=['coverage', 'pydot', 'matplotlib', 'pexpect',
                          'pandas', 'theano', 'h5py', 'mock', 'cython'],
           cmdclass=cmdclass,
           keywords=['systems', 'biology', 'model', 'rules'],

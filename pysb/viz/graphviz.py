@@ -53,15 +53,11 @@ that the species is involved as both a reactant and a product, i.e., it serves
 as a "modifier" (enzyme or catalyst).
 
 """
-
 from __future__ import print_function
-
 import os
 import re
 import sys
-
 import pydot
-
 import pysb.bng
 
 # Alias basestring under Python 3 for forwards compatibility
@@ -90,45 +86,76 @@ def run_render_species(model, save_name=None, to_string=False):
     """
 
     pysb.bng.generate_equations(model)
-    if to_string:
-        return render_species(model.species, model.name, save_name
-                              ).create(prog='dot', format='dot')
-    else:
-        return render_species(model.species, model.name, save_name)
+
+    return render_species(model.species, model.name, save_name, to_string)
 
 
 def run_render_reactions(model, save_name=None, to_string=False):
-    if to_string:
-        return render_reactions(model, save_name).create(prog='dot',
-                                                         format='dot')
-    else:
-        return render_reactions(model, save_name)
+    """
+    Render the reactions from a model into the "dot" graph format.
+
+    Parameters
+    ----------
+    model : pysb.core.Model
+        The model to render.
+    save_name : str, optional
+        Will render and save an image to png with name provided
+    to_string: bool
+        Return the dot in string format
+    Returns
+    -------
+    string
+        The dot format output.
+    """
+
+    return render_reactions(model, save_name, to_string)
 
 
-def render_species(species_list, graph_name="", save_name=None):
+def render_species(species_list, graph_name="", save_name=None,
+                   to_string=False):
+    """
+    Render the species produced by a model into the "dot" graph format.
 
+    Parameters
+    ----------
+    species_list : list_list
+        pysb species to render
+    graph_name: str
+        name of grapj
+    save_name : str, optional
+        Will render and save an image to png with name provided
+    to_string : bool
+        Returns the string representation of the dot file
+    Returns
+    -------
+    pydot.Dot
+        Dot network
+    """
     graph = pydot.Dot(graph_name="{} species".format(graph_name),
                       graph_type='digraph', rankdir="LR", fontname='Arial',
                       dpi=200)
 
     graph.set_edge_defaults(fontname='Arial', fontsize=8)
+    monomer_label = '<<table border="0" cellborder="1" cellspacing="0">' \
+                    '<tr><td bgcolor="#a0ffa0"><b>{}</b></td></tr>'
+
     for si, cp in enumerate(species_list):
         sgraph_name = 'cluster_s%d' % si
-        cp_label = re.sub(r'% ', '%<br align="left"/>',
-                          str(cp)) + '<br align="left"/>'
-        sgraph_label = '<<font point-size="10" color="blue">s%d</font>' \
-                       '<br align="left"/>' \
-                       '<font face="Consolas" point-size="6">%s</font>>' % \
-                       (si, cp_label)
+
+        sp_label = '{}'.format(cp).replace('% ', '%<br align="left"/>')
+        sp_label += '<br align="left"/>'
+
+        sgraph_label = '<<font point-size="10" color="blue">s{}</font>' \
+                       '<br align="left"/><font face="Consolas"' \
+                       ' point-size="6">{}</font>>'.format(si, sp_label)
+
         subgraph = pydot.Cluster(graph_name=sgraph_name, label=sgraph_label,
                                  color="gray75", sortv=sgraph_name)
 
         bonds = {}
         for mi, mp in enumerate(cp.monomer_patterns):
-            monomer_node = '%s_%d' % (sgraph_name, mi)
-            monomer_label = '<<table border="0" cellborder="1" cellspacing="0">'
-            monomer_label += '<tr><td bgcolor="#a0ffa0"><b>%s</b></td></tr>' % \
-                             mp.monomer.name
+
+            mon_lab = monomer_label.format(mp.monomer.name)
             for site in mp.monomer.sites:
                 site_state = None
                 cond = mp.site_conditions[site]
@@ -138,10 +165,13 @@ def render_species(species_list, graph_name="", save_name=None):
                     site_state = cond[0]
                 site_label = site
                 if site_state is not None:
-                    site_label += '=<font color="purple">%s</font>' % site_state
-                monomer_label += '<tr><td port="%s">%s</td></tr>' % \
-                                 (site, site_label)
-            monomer_label += '</table>>'
+                    site_label += '=<font color="purple">{}</font>'.format(
+                        site_state
+                    )
+                mon_lab += '<tr><td port="{}">{}</td></tr>'.format(site,
+                                                                   site_label)
+            mon_lab += '</table>>'
+            monomer_node = '{}_{}'.format(sgraph_name, mi)
             for site, value in mp.site_conditions.items():
                 site_bonds = []  # list of bond numbers
                 if isinstance(value, int):
@@ -153,7 +183,7 @@ def render_species(species_list, graph_name="", save_name=None):
                 for b in site_bonds:
                     bonds.setdefault(b, []).append((monomer_node, site))
 
-            node = pydot.Node(monomer_node, label=monomer_label, shape="none",
+            node = pydot.Node(monomer_node, label=mon_lab, shape="none",
                               fontname="Arial", fontsize=8)
             subgraph.add_node(node)
         for bi, sites in bonds.items():
@@ -166,10 +196,12 @@ def render_species(species_list, graph_name="", save_name=None):
         graph.add_subgraph(subgraph)
     if save_name is not None:
         _save(graph, save_name)
+    if to_string:
+        return graph.to_string()
     return graph
 
 
-def render_reactions(model, save_name=None):
+def render_reactions(model, save_name=None, to_string=False):
     """
     Render the reactions produced by a model into the "dot" graph format.
 
@@ -179,6 +211,8 @@ def render_reactions(model, save_name=None):
         The model to render.
     save_name : str, optional
         Will render and save an image to png with name provided
+    to_string : bool
+        Returns the string representation of the dot file
     Returns
     -------
     pydot.Dot
@@ -190,9 +224,8 @@ def render_reactions(model, save_name=None):
     graph = pydot.Dot(directed=True, rankdir="LR", dpi=300)
     ic_species = [cp for cp, parameter in model.initial_conditions]
     for i, cp in enumerate(model.species):
-        species_node = 's%d' % i
-        slabel = re.sub(r'% ', r'%\\l', str(cp))
-        slabel += '\\l'
+        species_node = 's{}'.format(i)
+        species_label = '{}'.format(cp).replace('% ', '%\\l')+'\\l'
         color = "#ccffcc"
         # color species with an initial condition differently
         if len([s for s in ic_species if s.is_equivalent_to(cp)]):
@@ -200,14 +233,14 @@ def render_reactions(model, save_name=None):
 
         graph.add_node(
             pydot.Node(species_node,
-                       label=slabel,
+                       label=species_label,
                        shape="Mrecord",
                        fillcolor=color, style="filled", color="transparent",
                        fontsize="12",
                        margin="0.06,0")
         )
     for i, reaction in enumerate(model.reactions_bidirectional):
-        reaction_node = 'r%d' % i
+        reaction_node = 'r{}'.format(i)
         graph.add_node(
             pydot.Node(reaction_node,
                        label=reaction_node,
@@ -220,7 +253,8 @@ def render_reactions(model, save_name=None):
         modifiers = reactants & products
         reactants = reactants - modifiers
         products = products - modifiers
-        attr_reversible = {'dir': 'both', 'arrowtail': 'empty'} if reaction['reversible'] else {}
+        attr_reversible = {'dir': 'both', 'arrowtail': 'empty'} \
+            if reaction['reversible'] else {}
         for s in reactants:
             r_link(graph, s, i, **attr_reversible)
         for s in products:
@@ -229,6 +263,8 @@ def render_reactions(model, save_name=None):
             r_link(graph, s, i, arrowhead="odiamond")
     if save_name is not None:
         _save(graph, save_name)
+    if to_string:
+        return graph.to_string()
     return graph
 
 
@@ -265,9 +301,9 @@ if __name__ == '__main__':
     else:
         s_name = None
     if s_name is None:
-        to_string = True
+        as_string = True
     else:
-        to_string = False
+        as_string = False
     if not os.path.exists(model_filename):
         raise Exception("File '%s' doesn't exist" % model_filename)
     if not re.search(r'\.py$', model_filename):
@@ -291,10 +327,10 @@ if __name__ == '__main__':
 
     if sys.argv[1] == 'render_reactions':
         print(run_render_reactions(loc_model, save_name=s_name,
-                                   to_string=to_string))
+                                   to_string=as_string))
     elif sys.argv[1] == 'render_species':
         print(run_render_species(loc_model, save_name=s_name,
-                                 to_string=to_string))
+                                 to_string=as_string))
     else:
         print(usage, end=' ')
         exit()

@@ -10,4 +10,3 @@ for Kappa models).
    :maxdepth: 2
 
    render_reactions.rst
-   render_species.rst
