@@ -245,9 +245,9 @@ def render_reactions(model, save_name=None, to_string=False):
             pydot.Node(reaction_node,
                        label=reaction_node,
                        shape="circle",
-                       fillcolor="lightgray", style="filled", color="transparent",
-                       fontsize="12",
-                       width=".3", height=".3", margin="0.06,0"))
+                       fillcolor="lightgray", style="filled",
+                       color="transparent", fontsize="12", width=".3",
+                       height=".3", margin="0.06,0"))
         reactants = set(reaction['reactants'])
         products = set(reaction['products'])
         modifiers = reactants & products
