@@ -7,6 +7,10 @@ except ImportError:
 from pysb.builder import Builder
 from pysb.core import *
 import copy
+import pydot
+import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
+from StringIO import StringIO
 
 class BooleanTranslationError(Exception):
     pass
@@ -71,7 +75,7 @@ class BooleanTranslator(Builder):
             nfired_pat = []
         #~~~~~
         for name,state in self.initial_states.items():
-            rank = self.function_ranks[name]
+            rank = self.function_ranks.get(name)
             # create monomer
             mon_sites = ['state']
             mon_site_states = {'state' : ['False','True']}
@@ -147,7 +151,7 @@ class BooleanTranslator(Builder):
         orderedNodes = self._findMinPathOrderHeap(self.functions, self.function_nodes)
         
         # create Rules
-        BDDs = self._grove(self.functions, orderedNodes)   
+        BDDs = self._grove(self.functions, orderedNodes)
         for bdd in BDDs:
             self._createRules(bdd, mode=mode)
     
@@ -675,7 +679,7 @@ class BooleanTranslator(Builder):
                     
         return indexList
     
-    def printTree(self, expansion): 
+    def printTree(self, expansion, fname='BDD', show=False): 
         """
         Utility for displaying the ROBDD
         
@@ -684,19 +688,25 @@ class BooleanTranslator(Builder):
         printTree(_constructBDD(Node(function, node_list)))
         """
         indexList = self._displayIndex(expansion)
-        nodeList = []
         graph = pydot.Dot(graph_type='digraph')
         for i,j in enumerate(indexList, 1):
             for k,l in enumerate(indexList[i]):
-                node = pydot._Node(indexList[i][k].index_name+indexList[i][k].id)
+                node = pydot.Node(indexList[i][k].index_name+indexList[i][k].id)
                 node.set('label', indexList[i][k].index_name)
                 node.set('rank', indexList[i][k].index)
                 graph.add_node(node)
             for k,l in enumerate(indexList[i]):
                 if i != len(indexList):
-                    graph.add_edge(pydot.Edge(pydot._Node(indexList[i][k].index_name+indexList[i][k].id), pydot._Node(indexList[i][k].true_node.index_name+indexList[i][k].true_node.id), label='1'))
-                    graph.add_edge(pydot.Edge(pydot._Node(indexList[i][k].index_name+indexList[i][k].id), pydot._Node(indexList[i][k].false_node.index_name+indexList[i][k].false_node.id), label='0'))
+                    graph.add_edge(pydot.Edge(pydot.Node(indexList[i][k].index_name+indexList[i][k].id), 
+                                              pydot.Node(indexList[i][k].true_node.index_name+indexList[i][k].true_node.id), 
+                                              label='1'))
+                    graph.add_edge(pydot.Edge(pydot.Node(indexList[i][k].index_name+indexList[i][k].id), 
+                                              pydot.Node(indexList[i][k].false_node.index_name+indexList[i][k].false_node.id), 
+                                              label='0'))
     
+        func_string = expansion.id + '* = ' + ' '.join(expansion.function)
+        node_order = 'order: ' + ', '.join(expansion.function_nodes)
+        plt.title( func_string + '\n' + node_order )
         png = graph.create_png(prog='dot')
         sio = StringIO()
         sio.write(png)
@@ -705,7 +715,9 @@ class BooleanTranslator(Builder):
         imgplot = plt.imshow(img)
         plt.axis('off')
         plt.tight_layout()
-        plt.show()
+        plt.savefig('%s.pdf' % fname, dpi=600, format='pdf')
+        if show:
+            plt.show()
         
 def model_from_boolean(filename, format='BooleanNet', mode='GSP', force=False):
     """
