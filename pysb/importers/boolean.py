@@ -372,7 +372,6 @@ class BooleanTranslator(Builder):
         """
         Rearranges leaves in accordance to the new node order
         """
-        l = leaves[:]
         lenN = len(nodes)
         lenL = len(leaves)
         groupSize = 2**(lenN-high+1)
@@ -384,9 +383,9 @@ class BooleanTranslator(Builder):
                     ind = 1
                 elif ind == 1:
                     ind = 0
-                    leaves[(i*groupSize + j):(i*groupSize + j)+exchangeSize], 
+                    leaves[(i*groupSize + j):(i*groupSize + j)+exchangeSize], \
                     leaves[(i*groupSize + j)+groupSize/2-exchangeSize:(i*groupSize + j)+groupSize/2] = \
-                    leaves[(i*groupSize + j)+groupSize/2-exchangeSize:(i*groupSize + j)+groupSize/2],
+                    leaves[(i*groupSize + j)+groupSize/2-exchangeSize:(i*groupSize + j)+groupSize/2], \
                     leaves[(i*groupSize + j):(i*groupSize + j)+exchangeSize]
     
         return leaves   
@@ -395,23 +394,23 @@ class BooleanTranslator(Builder):
         """
         Determines a variable order for the minimum number of BDD paths using Heap's algorithm; this is a brute force method 
         """
-        # initial path reduction count
         newNodes = {}
         for key in functions:
+            # initial path reduction count
             newNodes[key] = copy.deepcopy(nodes[key])
             N = len(nodes[key])
             leaves = []
             table = self._computeTruthTable(functions[key], nodes[key])
             for i in range(1, len(table)):
-                leaves.append(table[i][len(table[i])-1])
+                leaves.append(table[i][-1])
             lenLeaves = len(leaves)
-            marks = [1]*(lenLeaves)
+            marks = [1]*lenLeaves
             for each in range(N):
                 set_size = 2**each
-                num_sets = 2**(N-(each))
+#                 num_sets = 2**(N-each) 
                 counter = 1
                 left = None
-                right = None       
+                right = None
                 for j in range(0, lenLeaves, set_size):
                     if counter == 1:
                         left = leaves[j:j+set_size]
@@ -424,8 +423,8 @@ class BooleanTranslator(Builder):
                         counter = 1
             pathcount = 0
             for each in marks:
-                pathcount += int(each)
-            index = [0 for i in range(N)]
+                pathcount += each
+            index = [0]*N
             i = 1
             
             # run through all permutations of node order while counting path reduction
@@ -436,7 +435,7 @@ class BooleanTranslator(Builder):
                     marks = [1]*(lenLeaves)
                     for each in range(N):
                         set_size = 2**each
-                        num_sets = 2**(N-(each))
+#                         num_sets = 2**(N-each)
                         counter = 1
                         left = None
                         right = None       
@@ -453,11 +452,10 @@ class BooleanTranslator(Builder):
                     nodes[key][swap], nodes[key][i] = nodes[key][i], nodes[key][swap]
                     paths = 0
                     for each in marks:
-                        paths += int(each)
+                        paths += each
                     if paths < pathcount:
                         pathcount = paths
                         newNodes[key] = copy.deepcopy(nodes[key])
-                        
                     index[i] += 1
                     i = 1
                 else:
@@ -706,7 +704,10 @@ class BooleanTranslator(Builder):
     
         func_string = expansion.id + '* = ' + ' '.join(expansion.function)
         node_order = 'order: ' + ', '.join(expansion.function_nodes)
-        plt.title( func_string + '\n' + node_order )
+        n_nodes = len(graph.get_nodes())-2
+        n_paths = len(self._pathExpansion(expansion))
+        nodes_and_paths = '%d nodes, %d paths' % (n_nodes,n_paths)
+        plt.title( '%s \n %s \n %s' % (func_string, node_order, nodes_and_paths ) )
         png = graph.create_png(prog='dot')
         sio = StringIO()
         sio.write(png)
