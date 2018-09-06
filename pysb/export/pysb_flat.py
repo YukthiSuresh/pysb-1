@@ -72,6 +72,7 @@ class PysbFlatExporter(Exporter):
         write_cset(self.model.expressions_constant())
         write_cset(self.model.compartments)
         write_cset(self.model.observables)
+        write_cset(self.model.tags)
         write_cset(self.model.expressions_dynamic())
         write_cset(self.model.rules)
         for pattern, value in self.model.initial_conditions:

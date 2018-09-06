@@ -126,7 +126,7 @@ class BngGenerator(object):
         max_length = max(len(e.name) for e in exprs) + 2
         self.__content += "begin functions\n"
         for i, e in enumerate(exprs):
-            signature = e.name + '()'
+            signature = '{}({})'.format(e.name, ','.join([sym.name for sym in e.expr.atoms(pysb.Tag)]))
             self.__content += ("  %-" + str(max_length) + "s   %s\n") % \
                 (signature, expression_to_muparser(e))
         self.__content += "end functions\n\n"
@@ -191,6 +191,8 @@ def format_complexpattern(cp):
     ret = '.'.join([format_monomerpattern(mp) for mp in cp.monomer_patterns])
     if cp.compartment is not None:
         ret = '@%s:%s' % (cp.compartment.name, ret)
+    if cp._tag:
+        ret = '%{}::{}'.format(cp._tag.name, ret)
     if cp.match_once:
         ret = '{MatchOnce}' + ret
     return ret
@@ -203,6 +205,8 @@ def format_monomerpattern(mp):
     ret = '%s(%s)' % (mp.monomer.name, site_pattern_code)
     if mp.compartment is not None:
         ret = '%s@%s' % (ret, mp.compartment.name)
+    if mp._tag:
+        ret = '{}%{}'.format(ret, mp._tag.name)
     return ret
 
 def format_site_condition(site, state):

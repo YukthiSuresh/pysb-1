@@ -104,7 +104,7 @@ class BnglBuilder(Builder):
                     else:
                         mon_states[state_nm] = bond_list
                 state = comp.get('state')
-                if state:
+                if state and state != '?':
                     # If we changed the state string, use the updated version
                     state = self._renamed_states.get(mon_name, {}).get(
                         state, state)
@@ -114,8 +114,15 @@ class BnglBuilder(Builder):
                     else:
                         # Site only has a state, no bond
                         mon_states[state_nm] = state
+
             mon_cpt = self.model.compartments.get(mon.get('compartment'))
             mon_pats.append(MonomerPattern(mon_obj, mon_states, mon_cpt))
+            if 'label' in mon.attrib.keys():
+                try:
+                    tag = self.model.tags[mon.get('label')]
+                except KeyError:
+                    tag = self.tag(mon.get('label'))
+                mon_pats[-1]._tag = tag
         return mon_pats
 
     def _parse_monomers(self):
@@ -147,7 +154,7 @@ class BnglBuilder(Builder):
                             self._renamed_states[mon_name])
                         )
             try:
-                self.monomer(mon_name, sites, states)
+                self.monomer(mon_name, sites, dict(states))
             except Exception as e:
                 if str(e).startswith('Duplicate sites specified'):
                     self._warn_or_except('Molecule %s has multiple '
@@ -270,12 +277,17 @@ class BnglBuilder(Builder):
                 cpt = self.model.compartments.get(rp.get('compartment'))
                 reactant_pats.append(ComplexPattern(self._parse_species(rp),
                                                     cpt))
+                if 'label' in rp.attrib:
+                    reactant_pats[-1]._tag = self.model.tags[rp.get('label')]
             product_pats = []
             for pp in r.iterfind(_ns('{0}ListOfProductPatterns/'
                                      '{0}ProductPattern')):
                 cpt = self.model.compartments.get(pp.get('compartment'))
                 product_pats.append(ComplexPattern(self._parse_species(pp),
                                                    cpt))
+
+                if 'label' in pp.attrib:
+                    product_pats[-1]._tag = self.model.tags[pp.get('label')]
             rule_exp = RuleExpression(ReactionPattern(reactant_pats),
                                       ReactionPattern(product_pats),
                                       is_reversible=False)
@@ -322,20 +334,31 @@ class BnglBuilder(Builder):
                                self.model.observables})
 
         for e in self._x.iterfind(_ns('{0}ListOfFunctions/{0}Function')):
-            if e.find(_ns('{0}ListOfArguments/{0}Argument')) is not None:
-                self._warn_or_except('Function %s is local, which is not '
-                                     'supported in PySB' % e.get('id'))
+            is_local = False
+            for arg in e.iterfind(_ns('{0}ListOfArguments/{0}Argument')):
+                is_local = True
+                tag_name = arg.get('id')
+                try:
+                    self.model.tags[tag_name]
+                except KeyError:
+                    tag = self.tag(tag_name)
+                    expr_namespace[tag_name] = tag
             expr_name = e.get('id')
             expr_text = e.find(_ns('{0}Expression')).text.replace('^', '**')
             expr_val = 0
             try:
                 expr_val = parse_expr(expr_text, local_dict=expr_namespace)
             except Exception as ex:
+                try:
+                    msg = ex.message
+                except AttributeError:
+                    msg = '(no further message)'
                 self._warn_or_except('Could not parse expression %s: '
                                      '%s\n\nError: %s' % (expr_name,
                                                           expr_text,
-                                                          ex.message))
-            expr_namespace[expr_name] = expr_val
+                                                          msg))
+            if not is_local:
+                expr_namespace[expr_name] = expr_val
             if isinstance(expr_val, numbers.Number):
                 self.parameter(expr_name, expr_val)
             else:

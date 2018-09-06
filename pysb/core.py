@@ -417,6 +417,7 @@ class MonomerPattern(object):
         self.site_conditions = site_conditions
         self.compartment = compartment
         self._graph = None
+        self._tag = None
 
     def is_concrete(self):
         """
@@ -481,7 +482,9 @@ class MonomerPattern(object):
         # updated according to our args (as in Monomer.__call__).
         site_conditions = self.site_conditions.copy()
         site_conditions.update(extract_site_conditions(conditions, **kwargs))
-        return MonomerPattern(self.monomer, site_conditions, self.compartment)
+        mp = MonomerPattern(self.monomer, site_conditions, self.compartment)
+        mp._tag = self._tag
+        return mp
 
     def __add__(self, other):
         if isinstance(other, MonomerPattern):
@@ -535,6 +538,17 @@ class MonomerPattern(object):
         else:
             return NotImplemented
 
+    def __matmul__(self, other):
+        if not isinstance(other, Tag):
+            return NotImplemented
+
+        if self._tag is not None:
+            raise TagAlreadySpecifiedError()
+
+        mp_new = self()
+        mp_new._tag = other
+        return mp_new
+
     def __repr__(self):
         value = '%s(' % self.monomer.name
         value += ', '.join([
@@ -545,8 +559,9 @@ class MonomerPattern(object):
         value += ')'
         if self.compartment is not None:
             value += ' ** ' + self.compartment.name
+        if self._tag is not None:
+            value = '{} @ {}'.format(self._tag.name, value)
         return value
-
 
 
 class ComplexPattern(object):
@@ -583,6 +598,7 @@ class ComplexPattern(object):
         self.compartment = compartment
         self.match_once = match_once
         self._graph = None
+        self._tag = None
 
     def is_concrete(self):
         """
@@ -861,6 +877,8 @@ class ComplexPattern(object):
             return NotImplemented
 
     def __mod__(self, other):
+        if self._tag is not None:
+            raise ValueError('Tag should be specified at the end of the complex')
         if isinstance(other, MonomerPattern):
             return ComplexPattern(self.monomer_patterns + [other], self.compartment, self.match_once)
         elif isinstance(other, ComplexPattern):
@@ -904,12 +922,25 @@ class ComplexPattern(object):
         else:
             return NotImplemented
 
+    def __matmul__(self, other):
+        if not isinstance(other, Tag):
+            return NotImplemented
+
+        if self._tag is not None:
+            raise TagAlreadySpecifiedError()
+
+        cp_new = self.copy()
+        cp_new._tag = other
+        return cp_new
+
     def __repr__(self):
         ret = ' % '.join([repr(p) for p in self.monomer_patterns])
         if self.compartment is not None:
             ret = '(%s) ** %s' % (ret, self.compartment.name)
         if self.match_once:
             ret = 'MatchOnce(%s)' % ret
+        if self._tag:
+            ret = '{} @ {}'.format(ret, self._tag.name)
         return ret
 
 
@@ -1425,6 +1456,26 @@ class Expression(Component, sympy.Symbol):
         return repr(self)
 
 
+class Tag(Component, sympy.Symbol):
+    """ Tag for labelling MonomerPatterns and ComplexPatterns """
+    def __new__(cls, name, _export=True):
+        return super(sympy.Symbol, cls).__new__(cls, name)
+
+    def __matmul__(self, other):
+        if not isinstance(other, MonomerPattern):
+            return NotImplemented
+
+        if other._tag is not None:
+            raise TagAlreadySpecifiedError()
+
+        new_mp = other()
+        new_mp._tag = self
+        return new_mp
+
+    def __repr__(self):
+        return "{}({})".format(self.__class__.__name__, repr(self.name))
+
+
 class Model(object):
 
     """
@@ -1477,7 +1528,7 @@ class Model(object):
     """
 
     _component_types = (Monomer, Compartment, Parameter, Rule, Observable,
-                        Expression)
+                        Expression, Tag)
 
     def __init__(self, name=None, base=None, _export=True):
         self.name = name
@@ -1489,6 +1540,7 @@ class Model(object):
         self.rules = ComponentSet()
         self.observables = ComponentSet()
         self.expressions = ComponentSet()
+        self.tags = ComponentSet()
         self.initial_conditions = []
         self.annotations = []
         self._odes = OdeView(self)
@@ -1899,6 +1951,9 @@ class UnknownSiteError(ValueError):
     pass
 
 class CompartmentAlreadySpecifiedError(ValueError):
+    pass
+
+class TagAlreadySpecifiedError(ValueError):
     pass
 
 
