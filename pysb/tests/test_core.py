@@ -373,23 +373,22 @@ def test_rulepattern_match_none_against_state():
     A(phospho=None) + A(phospho=None) >> A(phospho=1) % A(phospho=1)
 
 
-@unittest.skipIf(sys.version_info.major < 3, '@ operator not available in '
-                                             'Python 2')
-@with_model
-def test_tags():
-    Monomer('A', ['b'])
-    Tag('x')
+if sys.version_info.major >= 3:
+    @with_model
+    def test_tags():
+        Monomer('A', ['b'])
+        Tag('x')
 
-    assert repr(x) == "Tag('x')"
-    assert repr(x @ A() % A()) == 'x @ A() % A()'
-    assert repr(A() % A() @ x) == 'A() % A() @ x'
+        assert repr(x) == "Tag('x')"
+        assert repr(x @ A() % A()) == 'x @ A() % A()'
+        assert repr(A() % A() @ x) == 'A() % A() @ x'
 
-    # Postfix tagging should auto-upgrade a MonomerPattern to a ComplexPattern
-    assert isinstance(A() @ x, ComplexPattern)
+        # Postfix tags should auto-upgrade a MonomerPattern to a ComplexPattern
+        assert isinstance(A() @ x, ComplexPattern)
 
-    # Trying to extend a tagged complex should fail - the tag should always be
-    # specified last
-    assert_raises(ValueError, operator.mod, A(b=1) % A(b=1) @ x, A(b=1))
+        # Trying to extend a tagged complex should fail - the tag should always
+        # be specified last
+        assert_raises(ValueError, operator.mod, A(b=1) % A(b=1) @ x, A(b=1))
 
 
 @with_model

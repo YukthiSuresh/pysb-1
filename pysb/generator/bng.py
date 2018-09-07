@@ -193,7 +193,7 @@ def format_complexpattern(cp):
     if cp.compartment is not None:
         ret = '@%s:%s' % (cp.compartment.name, ret)
     if cp._tag:
-        ret = '%{}::{}'.format(cp._tag.name, ret)
+        ret = '%{}:{}'.format(cp._tag.name, ret)
     if cp.match_once:
         ret = '{MatchOnce}' + ret
     return ret
