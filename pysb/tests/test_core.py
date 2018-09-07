@@ -373,24 +373,6 @@ def test_rulepattern_match_none_against_state():
     A(phospho=None) + A(phospho=None) >> A(phospho=1) % A(phospho=1)
 
 
-if sys.version_info.major >= 3:
-    @with_model
-    def test_tags():
-        Monomer('A', ['b'])
-        Tag('x')
-
-        assert repr(x) == "Tag('x')"
-        assert repr(x @ A() % A()) == 'x @ A() % A()'
-        assert repr(A() % A() @ x) == 'A() % A() @ x'
-
-        # Postfix tags should auto-upgrade a MonomerPattern to a ComplexPattern
-        assert isinstance(A() @ x, ComplexPattern)
-
-        # Trying to extend a tagged complex should fail - the tag should always
-        # be specified last
-        assert_raises(ValueError, operator.mod, A(b=1) % A(b=1) @ x, A(b=1))
-
-
 @with_model
 def test_duplicate_sites():
     Monomer('A', ['a', 'a'])
@@ -406,3 +388,23 @@ def test_duplicate_sites():
 
     # Check _as_graph() works for duplicate sites
     B(b=(('u', 1), ('u', 2)))._as_graph()
+
+
+@with_model
+def test_tags():
+    Monomer('A', ['b'])
+    Tag('x')
+
+    # Use __matmul__ instead of @ for Python 2.7 support in tests
+    assert repr(x) == "Tag('x')"
+    assert repr(x.__matmul__(A()) % A()) == 'x @ A() % A()'
+    assert repr((A() % A()).__matmul__(x)) == 'A() % A() @ x'
+
+    # Postfix tags should auto-upgrade a MonomerPattern to a ComplexPattern
+    assert isinstance(A().__matmul__(x), ComplexPattern)
+
+    # Trying to extend a tagged complex should fail - the tag should always
+    # be specified last
+    assert_raises(ValueError, operator.mod, (A(b=1) % A(b=1)).__matmul__(x),
+                  A(b=1))
+
