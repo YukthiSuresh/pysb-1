@@ -582,9 +582,10 @@ class MonomerPattern(object):
         if self._tag is not None:
             raise TagAlreadySpecifiedError()
 
-        mp_new = self()
-        mp_new._tag = other
-        return mp_new
+        # Need to upgrade to a ComplexPattern
+        cp_new = as_complex_pattern(self)
+        cp_new._tag = other
+        return cp_new
 
     def __repr__(self):
         value = '%s(' % self.monomer.name

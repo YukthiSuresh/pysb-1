@@ -384,6 +384,9 @@ def test_tags():
     assert repr(x @ A() % A()) == 'x @ A() % A()'
     assert repr(A() % A() @ x) == 'A() % A() @ x'
 
+    # Postfix tagging should auto-upgrade a MonomerPattern to a ComplexPattern
+    assert isinstance(A() @ x, ComplexPattern)
+
     # Trying to extend a tagged complex should fail - the tag should always be
     # specified last
     assert_raises(ValueError, operator.mod, A(b=1) % A(b=1) @ x, A(b=1))
