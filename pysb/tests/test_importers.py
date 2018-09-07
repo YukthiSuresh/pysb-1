@@ -19,6 +19,10 @@ def bngl_import_compare_simulations(bng_file, force=False,
     """
     m = model_from_bngl(bng_file, force=force)
 
+    if sim_times is None:
+        # Skip simulation check
+        return
+
     # Simulate using the BNGL file directly
     with BngFileInterface(model=None) as bng:
         bng.action('readFile', file=bng_file, skip_actions=1)
@@ -109,12 +113,14 @@ def test_bngl_import_expected_passes_with_force():
                      'continue',
                      'gene_expr',
                      'gene_expr_func',
+                     'localfunc',
                      'Motivating_example',
                      'Motivating_example_cBNGL',
                      'test_synthesis_cBNGL_simple',
                      'test_synthesis_complex',
                      'test_synthesis_complex_source_cBNGL',
-                     'test_synthesis_simple'
+                     'test_synthesis_simple',
+                     'test_fixed',
                      ):
         full_filename = _bngl_location(filename)
         with warnings.catch_warnings():
@@ -123,9 +129,19 @@ def test_bngl_import_expected_passes_with_force():
 
 
 def test_bngl_import_expected_passes_nfsim():
-    for filename in ('isingspin_localfcn',):
+    for filename in ('isingspin_localfcn',
+                     ):
         full_filename = _bngl_location(filename)
         yield (bngl_import_compare_nfsim, full_filename)
+
+
+def test_bngl_import_expected_passes_no_sim():
+    """ These models convert properly, but take too long to run """
+    for filename in ('blbr',
+                     'hybrid_test',  # Population maps are not converted
+                     'tlbr'):
+        full_filename = _bngl_location(filename)
+        yield (bngl_import_compare_simulations, full_filename, False, None)
 
 
 def test_bngl_import_expected_passes():
@@ -143,7 +159,11 @@ def test_bngl_import_expected_passes():
                      'test_synthesis_complex_0_cBNGL',
                      'toy-jim',
                      'univ_synth',
-                     'visualize'):
+                     'visualize',
+                     'Repressilator',
+                     'fceri_ji',
+                     'test_paramname',
+                     'tlmr'):
         full_filename = _bngl_location(filename)
         yield (bngl_import_compare_simulations, full_filename)
 
@@ -152,22 +172,15 @@ def test_bngl_import_expected_errors():
     errtype = {'localfn': 'Function \w* is local',
                'ratelawtype': 'Rate law \w* has unknown type',
                'ratelawmissing': 'Rate law missing for rule',
+               'statelabels': 'BioNetGen component/state labels are not yet supported',
                'dupsites': 'Molecule \w* has multiple sites with the same name'
               }
+
     expected_errors = {'CaOscillate_Sat': errtype['ratelawtype'],
-                       'Repressilator': errtype['dupsites'],
-                       'blbr': errtype['dupsites'],
-                       'fceri_ji': errtype['dupsites'],
-                       'heise': errtype['dupsites'],
-                       'hybrid_test': errtype['dupsites'],
+                       'heise': errtype['statelabels'],
                        'isingspin_energy': errtype['ratelawmissing'],
-                       'localfunc': errtype['dupsites'],
                        'test_MM': errtype['ratelawtype'],
                        'test_sat': errtype['ratelawtype'],
-                       'test_fixed': errtype['dupsites'],
-                       'test_paramname': errtype['dupsites'],
-                       'tlbr': errtype['dupsites'],
-                       'tlmr': errtype['dupsites']
                        }
 
     for filename, errmsg in expected_errors.items():

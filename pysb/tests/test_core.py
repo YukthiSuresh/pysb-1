@@ -3,6 +3,7 @@ from pysb.core import *
 from functools import partial
 from nose.tools import assert_raises
 import operator
+import unittest
 
 
 @with_model
@@ -386,3 +387,20 @@ def test_tags():
     # Trying to extend a tagged complex should fail - the tag should always be
     # specified last
     assert_raises(ValueError, operator.mod, A(b=1) % A(b=1) @ x, A(b=1))
+
+
+@with_model
+def test_duplicate_sites():
+    Monomer('A', ['a', 'a'])
+    Monomer('B', ['b', 'b'], {'b': ['u', 'p']})
+
+    assert not A(a=1).is_concrete()
+    assert A(a=(1, 2)).is_concrete()
+    assert A(a=(1, None)).is_concrete()
+
+    assert not B(b=('u', 1)).is_concrete()
+    assert B(b=('u', 'p')).is_concrete()
+    assert B(b=(('u', 1), ('u', 2))).is_concrete()
+
+    # Check _as_graph() works for duplicate sites
+    B(b=(('u', 1), ('u', 2)))._as_graph()
