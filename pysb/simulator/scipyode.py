@@ -200,6 +200,8 @@ class ScipyOdeSimulator(Simulator):
             if self._compiler == 'cython':
                 if not Cython:
                     raise ImportError('Cython library is not installed')
+                if 'math.' in code_eqs:
+                    code_eqs = 'import math\n' + code_eqs
                 code_eqs = CYTHON_DECL + code_eqs
 
                 def rhs(t, y, p):
@@ -316,6 +318,8 @@ class ScipyOdeSimulator(Simulator):
                     with self._patch_distutils_logging:
                         jacobian(0.0, self.initials[0], self.param_values[0])
                 else:
+                    if 'math.' in jac_eqs:
+                        jac_eqs = 'import math\n' + jac_eqs
                     jac_eqs = CYTHON_DECL + jac_eqs
 
                     def jacobian(t, y, p):

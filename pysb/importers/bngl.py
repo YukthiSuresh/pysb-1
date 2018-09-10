@@ -171,8 +171,8 @@ class BnglBuilder(Builder):
                         )
             try:
                 self.monomer(mon_name, sites,
-                             {c_name: statedict.values() for c_name, statedict
-                              in states.items()})
+                             {c_name: list(statedict.values())
+                              for c_name, statedict in states.items()})
             except Exception as e:
                 if str(e).startswith('Duplicate sites specified'):
                     self._warn_or_except('Molecule %s has multiple '
@@ -205,6 +205,10 @@ class BnglBuilder(Builder):
     def _parse_observables(self):
         for o in self._x.iterfind(_ns('{0}ListOfObservables/{0}Observable')):
             o_name = o.get('name')
+            # Some BNG observables have same name as a monomer, but in PySB
+            # these must be unique
+            if o_name in self.model.monomers.keys():
+                o_name = 'Obs_{}'.format(o_name)
             cplx_pats = []
             for mp in o.iterfind(_ns('{0}ListOfPatterns/{0}Pattern')):
                 match_once = mp.get('matchOnce')
@@ -355,6 +359,8 @@ class BnglBuilder(Builder):
 
     def _parse_expressions(self):
         expr_namespace = {p.name: p.value for p in self.model.parameters}
+        expr_namespace.update({e.name: e for e in
+                               self.model.expressions_constant()})
         expr_namespace.update({o.name: o for o in
                                self.model.observables})
 
