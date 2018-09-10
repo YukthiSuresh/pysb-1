@@ -733,6 +733,13 @@ def generate_equations(model, cleanup=True, verbose=False, **kwargs):
 def _parse_netfile(model, lines):
     """ Parse species, rxns and groups from a BNGL net file """
     try:
+        while 'begin parameters' not in next(lines):
+            pass
+        while True:
+            line = next(lines)
+            if 'end parameters' in line: break
+            _parse_parameter(model, line)
+
         while 'begin species' not in next(lines):
             pass
         model.species = []
@@ -768,6 +775,32 @@ def _parse_netfile(model, lines):
         pass
 
 
+def _parse_parameter(model, line):
+    index, pname, pval, hash, ptype = line.strip().split()
+    par_names = model.components.keys()
+    if pname not in par_names:
+        if ptype == 'Constant':
+            try:
+                p = pysb.core.Parameter(pname, pval, _export=False)
+            except ValueError:
+                p = pysb.core.Parameter(pname,
+                                        eval(pval.replace('^', '**')),
+                                        _export=False)
+            model.add_component(p)
+        elif ptype == 'ConstantExpression':
+            import re
+            for match in  re.finditer('\((\d+)>(\d+)\)', pval):
+                pval = pval.replace(
+                    match.group(0),
+                    '1' if int(match.group(1)) > int(match.group(2)) else '0'
+                )
+            p = pysb.core.Expression(pname, sympy.sympify(pval), _export=False)
+            model.add_component(p)
+        else:
+            raise ValueError(
+                'Unknown type \'%s\' for parameter %s' % (ptype, pname))
+
+
 def _parse_species(model, line):
     """Parse a 'species' line from a BNGL net file."""
     index, species, value = line.strip().split()
@@ -779,7 +812,7 @@ def _parse_species(model, line):
     for ms in monomer_strings:
         monomer_name, site_strings, monomer_compartment_name = \
             re.match(r'(\w+)\(([^)]*)\)(?:@(\w+))?', ms).groups()
-        site_conditions = {}
+        site_conditions = collections.defaultdict(list)
         if len(site_strings):
             for ss in site_strings.split(','):
                 # FIXME this should probably be done with regular expressions
@@ -803,7 +836,9 @@ def _parse_species(model, line):
                     site_name, condition = ss.split('~')
                 else:
                     site_name, condition = ss, None
-                site_conditions[site_name] = condition
+                site_conditions[site_name].append(condition)
+        site_conditions = {k: v[0] if len(v) == 1 else tuple(v)
+                           for k, v in site_conditions.items()}
         monomer = model.monomers[monomer_name]
         monomer_compartment = model.compartments.get(monomer_compartment_name)
         # Compartment prefix notation in BNGL means "assign this compartment to

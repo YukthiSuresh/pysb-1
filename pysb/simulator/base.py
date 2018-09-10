@@ -5,7 +5,7 @@ import sympy
 import collections
 import numbers
 from pysb.core import MonomerPattern, ComplexPattern, as_complex_pattern, \
-                      Parameter, Expression
+                      Parameter, Expression, Tag
 from pysb.logging import get_logger, EXTENDED_DEBUG
 import pickle
 from pysb import __version__ as PYSB_VERSION
@@ -752,7 +752,7 @@ class SimulationResult(object):
             self._y = None
 
         # Calculate ``yobs`` and ``yexpr`` based on values of ``y``
-        exprs = self._model.expressions_dynamic()
+        exprs = self._model.expressions_dynamic(include_local=False)
         expr_names = [expr.name for expr in exprs]
         model_obs = self._model.observables
         obs_names = list(model_obs.keys())
