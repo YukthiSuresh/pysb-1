@@ -4,13 +4,13 @@ from pysb.builder import Builder
 from pysb.bng import BngFileInterface
 import xml.etree.ElementTree
 import re
+import sympy
 from sympy.parsing.sympy_parser import parse_expr
 import warnings
 import pysb.logging
 import collections
 import numbers
 import os
-import math
 
 
 def _ns(tag_string):
@@ -65,7 +65,8 @@ class BnglBuilder(Builder):
 
         # Quick security check on the expression
         if re.match(r'^[\w\s()/+\-._*]*$', expression):
-            return eval(expression, {'ln': math.log}, self._model_env)
+            return sympy.sympify(expression, locals=self._model_env,
+                                 evaluate=False)
         else:
             self._warn_or_except('Security check on expression "%s" failed' %
                                  expression)
@@ -334,18 +335,18 @@ class BnglBuilder(Builder):
             if r.find(_ns('{}ListOfExcludeReactants')) is not None or \
                r.find(_ns('{}ListOfExcludeProducts')) is not None:
                 self._warn_or_except('ListOfExcludeReactants and/or '
-                                     'ListOfExcludeProducts declarations will '
-                                     'be ignored. This may lead to long '
-                                     'network generation times.')
+                                     'ListOfExcludeProducts declarations '
+                                     'are deprecated in BNG, and not supported '
+                                     'in PySB.')
 
             # Give warning/error if ListOfIncludeReactants or
             # ListOfIncludeProducts is present
             if r.find(_ns('{}ListOfIncludeReactants')) is not None or \
                r.find(_ns('{}ListOfIncludeProducts')) is not None:
                 self._warn_or_except('ListOfIncludeReactants and/or '
-                                     'ListOfIncludeProducts declarations will '
-                                     'be ignored. This may lead to long '
-                                     'network generation times.')
+                                     'ListOfIncludeProducts declarations '
+                                     'are deprecated in BNG, and not supported '
+                                     'in PySB.')
 
             self.rule(r_name, rule_exp, r_rate,
                       delete_molecules=delete_molecules)
@@ -361,8 +362,7 @@ class BnglBuilder(Builder):
         expr_namespace = {p.name: p.value for p in self.model.parameters}
         expr_namespace.update({e.name: e for e in
                                self.model.expressions_constant()})
-        expr_namespace.update({o.name: o for o in
-                               self.model.observables})
+        expr_namespace.update({o.name: o for o in self.model.observables})
 
         for e in self._x.iterfind(_ns('{0}ListOfFunctions/{0}Function')):
             is_local = False

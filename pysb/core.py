@@ -1497,6 +1497,10 @@ class Expression(Component, sympy.Symbol):
     def func(self):
         return sympy.Symbol
 
+    @property
+    def is_local(self):
+        return len(self.expr.atoms(Tag)) > 0
+
     def __repr__(self):
         ret = '%s(%s, %s)' % (self.__class__.__name__, repr(self.name),
                               repr(self.expr))
@@ -1510,6 +1514,12 @@ class Tag(Component, sympy.Symbol):
     """ Tag for labelling MonomerPatterns and ComplexPatterns """
     def __new__(cls, name, _export=True):
         return super(sympy.Symbol, cls).__new__(cls, name)
+
+    def __getnewargs__(self):
+        return self.name, False
+
+    def __init__(self, name, _export=True):
+        Component.__init__(self, name, _export)
 
     def __matmul__(self, other):
         if not isinstance(other, MonomerPattern):
@@ -1746,9 +1756,12 @@ class Model(object):
                             if e.is_constant_expression())
         return cset
 
-    def expressions_dynamic(self):
+    def expressions_dynamic(self, include_local=True):
         """Return a ComponentSet of non-constant expressions."""
-        return self.expressions - self.expressions_constant()
+        cset = self.expressions - self.expressions_constant()
+        if not include_local:
+            cset = ComponentSet(e for e in cset if not e.is_local)
+        return cset
 
     @property
     def odes(self):

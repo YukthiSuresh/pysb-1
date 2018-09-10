@@ -733,6 +733,13 @@ def generate_equations(model, cleanup=True, verbose=False, **kwargs):
 def _parse_netfile(model, lines):
     """ Parse species, rxns and groups from a BNGL net file """
     try:
+        while 'begin parameters' not in next(lines):
+            pass
+        while True:
+            line = next(lines)
+            if 'end parameters' in line: break
+            _parse_parameter(model, line)
+
         while 'begin species' not in next(lines):
             pass
         model.species = []
@@ -766,6 +773,32 @@ def _parse_netfile(model, lines):
 
     except StopIteration as e:
         pass
+
+
+def _parse_parameter(model, line):
+    index, pname, pval, hash, ptype = line.strip().split()
+    par_names = model.components.keys()
+    if pname not in par_names:
+        if ptype == 'Constant':
+            try:
+                p = pysb.core.Parameter(pname, pval, _export=False)
+            except ValueError:
+                p = pysb.core.Parameter(pname,
+                                        eval(pval.replace('^', '**')),
+                                        _export=False)
+            model.add_component(p)
+        elif ptype == 'ConstantExpression':
+            import re
+            for match in  re.finditer('\((\d+)>(\d+)\)', pval):
+                pval = pval.replace(
+                    match.group(0),
+                    '1' if int(match.group(1)) > int(match.group(2)) else '0'
+                )
+            p = pysb.core.Expression(pname, sympy.sympify(pval), _export=False)
+            model.add_component(p)
+        else:
+            raise ValueError(
+                'Unknown type \'%s\' for parameter %s' % (ptype, pname))
 
 
 def _parse_species(model, line):
