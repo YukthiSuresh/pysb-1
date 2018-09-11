@@ -787,16 +787,52 @@ def _parse_parameter(model, line):
                                         _export=False)
             model._derived_parameters.add(p)
         elif ptype == 'ConstantExpression':
-            comps = {c.name: c for c in model.all_components()}
-            p = pysb.core.Expression(
-                pname,
-                eval(pval.replace('^', '**'), {}, comps),
-                _export=False
-            )
+            pval = _fix_booleans(pval)
+            p = pysb.core.Expression(pname, sympy.sympify(pval),
+                                     _export=False)
             model._derived_expressions.add(p)
         else:
             raise ValueError('Unknown type {} for parameter {}'.format(
                 ptype, pname))
+
+
+_RE_NUMBER = '\d+(?:.\d+)?'
+_RE_EQUAL_INEQ = '{0}\s*([<>]=?|!=|==)\s*{0}'.format(_RE_NUMBER)
+_RE_AND = '({0})\s*&&\s*({0})'.format(_RE_NUMBER)
+_RE_OR = '({0})\s*\|\|\s*({0})'.format(_RE_NUMBER)
+_RE_NUMBER_PARENS = '\(\s*({0})\s*\)'.format(_RE_NUMBER)
+
+
+def _fix_booleans(pval):
+    """ Evaluate boolean expressions to integers
+
+    Inequalities (e.g. "(0>1)") don't parse to integers in sympy, so expressions
+    from BNG like "(1>0)*10" cause a sympy parse error. To avoid this, we
+    replace the boolean expressions using a regex before calling sympy.
+    """
+    while True:
+        orig = pval
+
+        for match in re.finditer(_RE_OR, pval):
+            pval = pval.replace(
+                match.group(0),
+                '1' if float(match.group(1)) or float(match.group(2)) else '0'
+            )
+        for match in re.finditer(_RE_AND, pval):
+            pval = pval.replace(
+                match.group(0),
+                '1' if float(match.group(1)) and float(match.group(2)) else '0'
+            )
+        for match in re.finditer(_RE_EQUAL_INEQ, pval):
+            pval = pval.replace(
+                match.group(0),
+                '1' if eval(match.group(0)) else '0'
+            )
+        for match in re.finditer(_RE_NUMBER_PARENS, pval):
+            pval = pval.replace(match.group(0), match.group(1))
+
+        if orig == pval:
+            return pval
 
 
 def _parse_species(model, line):
