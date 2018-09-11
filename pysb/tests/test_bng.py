@@ -4,6 +4,7 @@ from pysb.bng import *
 import os
 import unittest
 from nose.tools import assert_raises_regexp
+from pysb.bng import _fix_booleans
 
 
 @with_model
@@ -202,3 +203,14 @@ def test_bng_error():
         generate_equations,
         model
     )
+
+
+def test_eval_booleans():
+    assert _fix_booleans('((10 > 0) && (0 < 100)) * 10 + k_basal') == \
+        '1 * 10 + k_basal'
+    assert _fix_booleans('((10 > 0) || (100 < 100)) * 10 + k_basal') == \
+        '1 * 10 + k_basal'
+    assert _fix_booleans('(10!=2)+1') == '1+1'
+    assert _fix_booleans('(10==2)|| (12 > 1)') == '1'
+    assert _fix_booleans('1 || 0') == '1'
+    assert _fix_booleans('1.2 && 0') == '0'
