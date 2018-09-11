@@ -15,6 +15,7 @@ import shutil
 import collections
 import pysb.pathfinder as pf
 from pysb.logging import get_logger, EXTENDED_DEBUG
+import logging
 
 try:
     from cStringIO import StringIO
@@ -787,12 +788,14 @@ def _parse_parameter(model, line):
                                         _export=False)
             model._derived_parameters.add(p)
         elif ptype == 'ConstantExpression':
-            comps = {c.name: c for c in model.all_components()}
-            p = pysb.core.Expression(
-                pname,
-                eval(pval.replace('^', '**'), {}, comps),
-                _export=False
-            )
+            # Inequalities (e.g. "(0>1)") don't parse to integers in sympy
+            # So, we first replace them using a regex
+            for match in re.finditer('\((\d+)>(\d+)\)', pval):
+                pval = pval.replace(
+                    match.group(0),
+                    '1' if int(match.group(1)) > int(match.group(2)) else '0'
+                )
+            p = pysb.core.Expression(pname, sympy.sympify(pval), _export=False)
             model._derived_expressions.add(p)
         else:
             raise ValueError('Unknown type {} for parameter {}'.format(
