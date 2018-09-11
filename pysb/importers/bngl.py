@@ -331,9 +331,8 @@ class BnglBuilder(Builder):
             rule.rate_reverse = rev_rate
 
     def _parse_expressions(self):
-        expr_namespace = {p.name: p.value for p in self.model.parameters}
-        expr_namespace.update({e.name: e for e in
-                               self.model.expressions_constant()})
+        expr_namespace = {e.name: e for e in
+                          self.model.expressions_constant()}
         expr_namespace.update({o.name: o for o in self.model.observables})
 
         for e in self._x.iterfind(_ns('{0}ListOfFunctions/{0}Function')):
