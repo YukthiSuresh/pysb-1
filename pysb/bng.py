@@ -786,19 +786,20 @@ def _parse_parameter(model, line):
                 p = pysb.core.Parameter(pname,
                                         eval(pval.replace('^', '**')),
                                         _export=False)
-            model.add_component(p)
+            model._derived_parameters.add(p)
         elif ptype == 'ConstantExpression':
-            import re
-            for match in  re.finditer('\((\d+)>(\d+)\)', pval):
+            # Inequalities (e.g. "(0>1)") don't parse to integers in sympy
+            # So, we first replace them using a regex
+            for match in re.finditer('\((\d+)>(\d+)\)', pval):
                 pval = pval.replace(
                     match.group(0),
                     '1' if int(match.group(1)) > int(match.group(2)) else '0'
                 )
             p = pysb.core.Expression(pname, sympy.sympify(pval), _export=False)
-            model.add_component(p)
+            model._derived_expressions.add(p)
         else:
-            raise ValueError(
-                'Unknown type \'%s\' for parameter %s' % (ptype, pname))
+            raise ValueError('Unknown type {} for parameter {}'.format(
+                ptype, pname))
 
 
 def _parse_species(model, line):
@@ -870,7 +871,8 @@ def _parse_reaction(model, line, reaction_cache):
     is_reverse = tuple(bool(i) for i in is_reverse)
     r_names = ['__s%d' % r for r in reactants]
     rate_param = [model.parameters.get(r) or model.expressions.get(r) or
-                  float(r) for r in rate]
+                  model._derived_parameters.get(r) or
+                  model._derived_expressions.get(r) or float(r) for r in rate]
     combined_rate = sympy.Mul(*[sympy.S(t) for t in r_names + rate_param])
     reaction = {
         'reactants': reactants,

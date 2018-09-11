@@ -177,6 +177,7 @@ class Builder(object):
         self.model.initial(*args)
 
     def tag(self, *args, **kwargs):
+        """Adds a tag to the Builder's model instance."""
         t = Tag(*args, _export=False, **kwargs)
         self.model.add_component(t)
         return t

@@ -42,7 +42,7 @@ def bngl_import_compare_simulations(bng_file, force=False,
     for species in range(len(yfull1)):
         for tp in range(len(yfull1[species])):
             if not numpy.isclose(yfull1[species][tp],
-                                 yfull2[species][tp], atol=1e-5, rtol=1e-5):
+                                 yfull2[species][tp], atol=1e-4, rtol=1e-4):
                 print(species)
                 print(tp)
                 print(yfull1[species][tp])

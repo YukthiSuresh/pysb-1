@@ -1954,6 +1954,8 @@ class Model(object):
         self.reactions = []
         self.reactions_bidirectional = []
         self._stoichiometry_matrix = None
+        self._derived_parameters = ComponentSet()
+        self._derived_expressions = ComponentSet()
         for obs in self.observables:
             obs.species = []
             obs.coefficients = []
