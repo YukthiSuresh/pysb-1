@@ -796,7 +796,7 @@ def _parse_parameter(model, line):
                 ptype, pname))
 
 
-_RE_NUMBER = '\d+(?:.\d+)?'
+_RE_NUMBER = '\d+(?:\.\d+)?'
 _RE_EQUAL_INEQ = '{0}\s*([<>]=?|!=|==)\s*{0}'.format(_RE_NUMBER)
 _RE_AND = '({0})\s*&&\s*({0})'.format(_RE_NUMBER)
 _RE_OR = '({0})\s*\|\|\s*({0})'.format(_RE_NUMBER)

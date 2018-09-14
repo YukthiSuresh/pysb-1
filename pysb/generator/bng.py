@@ -177,8 +177,6 @@ def _tags_in_rate(expr):
         return ''
 
     tags = expr.tags()
-    if not tags:
-        return ''
 
     return '({})'.format(', '.join([t.name for t in tags]))
 
