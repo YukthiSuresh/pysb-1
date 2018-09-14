@@ -175,6 +175,13 @@ class Simulator(object):
                 if not found:
                     initials_dict[cp] = val
         elif initials_source is not None:
+            # Update from array-like structure, which we can only do if we
+            # have the species available (e.g. not in network-free simulations)
+            if not self.model.species:
+                raise ValueError(
+                    'Cannot update initials from an array-like source without '
+                    'model species. ')
+            initials_dict = {}
             for cp_idx, cp in enumerate(self.model.species):
                 initials_dict[cp] = [initials_source[n][cp_idx] for n in
                                      range(len(initials_source))]
