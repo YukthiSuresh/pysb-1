@@ -1311,6 +1311,44 @@ class Rule(Component):
                     raise ValueError('Product {} of synthesis rule {} is not '
                                      'concrete'.format(cp, self.name))
 
+        # Get tags from rule expression
+        tags = set()
+        for rxn_pat in (rule_expression.reactant_pattern,
+                        rule_expression.product_pattern):
+            if rxn_pat.complex_patterns:
+                for cp in rxn_pat.complex_patterns:
+                    if cp is not None:
+                        if cp._tag:
+                            tags.add(cp._tag)
+                        tags.update(mp._tag for mp in cp.monomer_patterns
+                                    if mp._tag is not None)
+
+        # Check that tags defined in rates are used in the expression
+        tags_rates = (self._check_rate_tags('forward', tags) +
+                      self._check_rate_tags('reverse', tags))
+
+        missing = tags.difference(set(tags_rates))
+        if missing:
+            names = [t.name for t in missing]
+            warnings.warn(
+                'Rule "{}": Tags {} defined in rule expression but not used in '
+                'rates'.format(self.name, ', '.join(names)), UserWarning)
+
+    def _check_rate_tags(self, direction, tags):
+        rate = self.rate_forward if direction == 'forward' else \
+            self.rate_reverse
+        if not isinstance(rate, Expression):
+            return []
+        tags_rate = rate.tags()
+        missing = set(tags_rate).difference(tags)
+        if missing:
+            names = [t.name for t in missing]
+            raise ValueError(
+                'Rule "{}": Tag(s) {} defined in {} rate but not in '
+                'expression'.format(self.name, ', '.join(names), direction))
+
+        return tags_rate
+
     def is_synth(self):
         """Return a bool indicating whether this is a synthesis rule."""
         return len(self.reactant_pattern.complex_patterns) == 0 or \
@@ -1500,6 +1538,9 @@ class Expression(Component, sympy.Symbol):
     @property
     def is_local(self):
         return len(self.expr.atoms(Tag)) > 0
+
+    def tags(self):
+        return sorted(self.expr.atoms(Tag), key=lambda tag: tag.name)
 
     def __repr__(self):
         ret = '%s(%s, %s)' % (self.__class__.__name__, repr(self.name),

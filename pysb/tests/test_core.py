@@ -408,3 +408,14 @@ def test_tags():
     assert_raises(ValueError, operator.mod, (A(b=1) % A(b=1)).__matmul__(x),
                   A(b=1))
 
+    Parameter('k1', 100)
+
+    # Create an expression containing a tag
+    Expression('e_no_tag', k1 ** 2)
+    Expression('e_tag', k1(x) ** 2)
+
+    # Test tag defined in rate but not in rule expression
+    assert_raises(ValueError, Rule, 'r1', None >> A(b=None), e_tag)
+
+    # Test tag defined in rule expression but not in rate
+    Rule('r2', None >> A(b=None).__matmul__(x), e_no_tag)

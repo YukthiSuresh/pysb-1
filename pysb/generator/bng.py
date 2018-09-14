@@ -99,8 +99,10 @@ class BngGenerator(object):
                 arrow = '<->'
             self.__content += ("  %-" + str(max_length) + "s  %s %s %s    %s") % \
                 (label, reactants_code, arrow, products_code, r.rate_forward.name)
+            self.__content += _tags_in_rate(r.rate_forward)
             if r.is_reversible:
                 self.__content += ', %s' % r.rate_reverse.name
+                self.__content += _tags_in_rate(r.rate_reverse)
             if r.delete_molecules:
                 self.__content += ' DeleteMolecules'
             if r.move_connected:
@@ -127,7 +129,7 @@ class BngGenerator(object):
         max_length = max(len(e.name) for e in exprs) + 2
         self.__content += "begin functions\n"
         for i, e in enumerate(exprs):
-            signature = '{}({})'.format(e.name, ','.join([sym.name for sym in e.expr.atoms(pysb.Tag)]))
+            signature = '{}({})'.format(e.name, ','.join(sorted([sym.name for sym in e.expr.atoms(pysb.Tag)])))
             self.__content += ("  %-" + str(max_length) + "s   %s\n") % \
                 (signature, expression_to_muparser(e))
         self.__content += "end functions\n\n"
@@ -168,6 +170,17 @@ class BngGenerator(object):
                               (cplx_pats[i], cs,
                                self._population_maps[i].lumping_rate.name)
         self.__content += 'end population maps\n\n'
+
+
+def _tags_in_rate(expr):
+    if not isinstance(expr, pysb.Expression):
+        return ''
+
+    tags = expr.tags()
+    if not tags:
+        return ''
+
+    return '({})'.format(', '.join([t.name for t in tags]))
 
 
 def format_monomer_site(monomer, site):
