@@ -67,6 +67,19 @@ class TestBngSimulator(object):
         self.time = None
         self.sim = None
 
+    def test_sequential_initials(self):
+        simres = self.sim.run()
+        orig_initials = self.sim.initials
+
+        new_initials = [10, 20, 30]
+        simres = self.sim.run(initials=new_initials)
+
+        # Check that single-run initials applied properly to the result
+        assert np.allclose(simres.species[0], new_initials)
+        assert np.allclose(simres.initials, new_initials)
+        # Check that the single-run initials were removed after the run
+        assert np.allclose(self.sim.initials, orig_initials)
+
 
 def test_bng_ode_with_expressions():
     model = expression_observables.model
