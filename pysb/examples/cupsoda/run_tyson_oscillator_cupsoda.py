@@ -1,5 +1,5 @@
 from pysb.examples.tyson_oscillator import model
-from pysb.simulator.cupsoda import CupSodaSimulator
+from pysb.simulator import CupSodaSimulator
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -8,10 +8,11 @@ def run():
     n_sims = 100
     vol = model.parameters['vol'].value
     tspan = np.linspace(0, 500, 501)
-    sim = CupSodaSimulator(model, tspan, vol=vol, verbose=True,
-                           integrator_options={'atol' : 1e-12,
-                                               'rtol' : 1e-6,
-                                               'max_steps' :20000})
+    sim = CupSodaSimulator(model, tspan, verbose=True,
+                           integrator_options={'atol': 1e-12,
+                                               'rtol': 1e-6,
+                                               'vol': vol,
+                                               'max_steps': 20000})
 
     # Rate constants
     param_values = np.ones((n_sims, len(model.parameters)))

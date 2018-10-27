@@ -2,7 +2,7 @@ import warnings
 import numpy as np
 from nose.plugins.attrib import attr
 from pysb.examples.tyson_oscillator import model
-from pysb.simulator.cupsoda import CupSodaSimulator, run_cupsoda
+from pysb.simulator.cupstools import CupSodaSimulator, run_cupsoda
 from nose.tools import raises
 import os
 

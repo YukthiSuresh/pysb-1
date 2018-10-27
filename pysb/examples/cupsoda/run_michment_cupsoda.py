@@ -1,5 +1,5 @@
 from pysb.examples.michment import model
-from pysb.simulator.cupsoda import run_cupsoda
+from pysb.simulator.cupstools import run_cupsoda
 import numpy as np
 import matplotlib.pyplot as plt
 import itertools

@@ -49,6 +49,18 @@ _path_config = {
             'nt': ('c:/Program Files/cupSODA',)
         }
     },
+    'lassie': {
+        'name': 'LASSIE',
+        'executable': {
+            'posix': 'lassie',
+            'nt': 'lassieWin.exe'
+        },
+        'env_var': 'LASSIEPATH',
+        'search_paths': {
+            'posix': ('/usr/local/share/lassie', ),
+            'nt': ('c:/Program Files/lassie', )
+        }
+    },
     'stochkit_ssa': {
         'name': 'StochKit [SSA]',
         'executable': {
