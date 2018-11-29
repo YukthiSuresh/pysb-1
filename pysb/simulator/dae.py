@@ -126,8 +126,8 @@ class DaeSimulator(Simulator):
         dae_mat = sympy.Matrix([(self.model.odes[i] - dydt[i]) for i in
                                 range(n_species)]).subs(self._eqn_subs)
 
-        self._atol = kwargs.get('atol', 1e-16)
-        self._rtol = kwargs.get('rtol', 1e-8)
+        self._atol = kwargs.pop('atol', 1e-16)
+        self._rtol = kwargs.pop('rtol', 1e-8)
 
         if eqn_mode == 'weave':
             if weave is None:

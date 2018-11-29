@@ -34,7 +34,8 @@ def run_dae_against_scipy(eqn_mode):
         dae_results.append(sim.run().dataframe)
 
         odesim = ScipyOdeSimulator(model=model, tspan=tspan,
-                                   atol=atol, rtol=rtol,
+                                   integrator_options={'atol': atol,
+                                                       'rtol': rtol},
                                    integrator='lsoda')
         ode_df = odesim.run().dataframe
 
