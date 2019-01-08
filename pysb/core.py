@@ -1557,6 +1557,13 @@ class Expression(Component, sympy.Symbol):
     def __str__(self):
         return repr(self)
 
+    def __call__(self, tag):
+        if not isinstance(tag, Tag):
+            raise ValueError('Expressions are only callable with a Tag '
+                             'instance, for use within local Expressions')
+
+        return sympy.Function(self.name)(tag)
+
 
 class Tag(Component, sympy.Symbol):
     """ Tag for labelling MonomerPatterns and ComplexPatterns """
