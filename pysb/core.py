@@ -1477,6 +1477,13 @@ class Observable(Component, sympy.Symbol):
     def __str__(self):
         return repr(self)
 
+    def __call__(self, tag):
+        if not isinstance(tag, Tag):
+            raise ValueError('Observables are only callable with a Tag '
+                             'instance, for use within local Expressions')
+
+        return sympy.Function(self.name)(tag)
+
 
 class Expression(Component, sympy.Symbol):
 
