@@ -25,8 +25,7 @@ class BngSimulator(Simulator):
 
     def run(self, tspan=None, initials=None, param_values=None, n_runs=1,
             method='ssa', output_dir=None, output_file_basename=None,
-            cleanup=True, population_maps=None, netgen_args={}, 
-            **additional_args):
+            cleanup=True, population_maps=None, **additional_args):
         """
         Simulate a model using BioNetGen
 
@@ -174,7 +173,7 @@ class BngSimulator(Simulator):
             if method != 'nf':
                 # TODO: Write existing netfile if already generated
                 bngfile.action('generate_network', overwrite=True,
-                               verbose=extended_debug, **netgen_args)
+                               verbose=extended_debug)
             if output_file_basename is None:
                 prefix = 'pysb'
             else:
@@ -194,24 +193,6 @@ class BngSimulator(Simulator):
                     bngfile.set_concentration(cp, values[pset_idx])
                 for sim_rpt in range(n_runs):
                     tmp = additional_args.copy()
-                    ##### TODO: ACCOUNT FOR 2D ARRAY OF SEEDS (multi param sets) #####
-                    seed = additional_args.get('seed')
-                    if seed is not None:
-                        if method != 'ode':
-                            if isinstance(seed, collections.Iterable):
-                                if len(seed) == n_runs:
-                                    tmp['seed'] = seed[sim_rpt]
-                                else:
-                                    raise ValueError("Length of 'seed' array ({}) does "
-                                                     "not match 'n_runs' ({})"
-                                                     .format(len(seed),n_runs))
-                            elif n_runs > 1:
-                                raise ValueError('`seed` must be a number or an array '
-                                                 'of numbers of length `n_runs`.')
-                        else:
-                            # If method='ode', 'seed' is superfluous--get rid of it
-                            tmp.pop('seed')
-                    #################################################################
                     tmp['prefix'] = '{}{}'.format(prefix, sim_prefix)
                     bngfile.action('simulate', **tmp)
                     bngfile.action('resetConcentrations')
