@@ -10,10 +10,6 @@ try:
     import cython
 except ImportError:
     cython = None
-try:
-    import weave
-except ImportError:
-    weave = None
 
 
 class DaeSimulator(Simulator):
@@ -65,17 +61,14 @@ class DaeSimulator(Simulator):
     **kwargs : dict
         Extra keyword arguments, including:
 
-        * ``eqn_mode``: Equation evaluation mode - one of `weave`, `cython`
+        * ``eqn_mode``: Equation evaluation mode - one of `cython`
         or `python`. They should give identical results, differing only in
-        speed. `weave` uses the `weave` library to compile the system of
-        equations into C code. `cython` does likewise with the `cython`
-        library (`weave` is only available on Python 2, but seems to be
-        faster). `python` uses `sympy`'s `lambdify` function to execute the
+        speed. `cython` does likewise with the `cython`
+        library. `python` uses `sympy`'s `lambdify` function to execute the
         system of equations in pure Python, which is the most compatible but
         slowest option. The `python` option might be necessary if your model
         contains non-standard `sympy` functions for example. In general,
-        we recommend `weave` for Python 2 and `cython` for Python 3 in the
-        first instance.
+        we recommend `cython` where possible.
 
         * ``atol``: Absolute tolerance (default: 1e-16)
 
@@ -111,7 +104,7 @@ class DaeSimulator(Simulator):
                  'multi_param_values': True}
 
     def __init__(self, model, tspan=None, initials=None,
-                 param_values=None, verbose=False, eqn_mode='weave', **kwargs):
+                 param_values=None, verbose=False, eqn_mode='cython', **kwargs):
         super(DaeSimulator, self).__init__(
             model=model, tspan=tspan, initials=initials,
             param_values=param_values, verbose=verbose, **kwargs)
@@ -129,21 +122,10 @@ class DaeSimulator(Simulator):
         self._atol = kwargs.pop('atol', 1e-16)
         self._rtol = kwargs.pop('rtol', 1e-8)
 
-        if eqn_mode == 'weave':
-            if weave is None:
-                raise ImportError('"weave" library not installed. Install '
-                                  'weave or switch eqn_mode to "python" or '
-                                  '"cython"')
-            code_eqs = '\n'.join(['delta[%d] = %s;' %
-                                  (i, sympy.ccode(o))
-                                  for i, o in enumerate(dae_mat)])
-            code_eqs = self._eqn_substitutions(code_eqs)
-            self._pdmodel = PyDasModelWeave(code_eqs, n_species)
-        elif eqn_mode == 'cython':
+        if eqn_mode == 'cython':
             if cython is None:
                 raise ImportError('"cython" library not installed. Install '
-                                  'cython or switch eqn_mode to "python" or '
-                                  '"weave"')
+                                  'cython or switch eqn_mode to "python"')
             code_eqs = '\n'.join(['delta[%d] = %s' %
                                   (i, sympy.ccode(o))
                                   for i, o in enumerate(dae_mat)])
@@ -215,19 +197,6 @@ class DaeSimulator(Simulator):
 
         self._logger.info('All simulation(s) complete')
         return SimulationResult(self, tout_all, trajectories)
-
-
-class PyDasModelWeave(DASSL):
-    def __init__(self, code_eqs, num_odes):
-        self._code_eqs = code_eqs
-        self.param_vec = None
-        self.num_odes = num_odes
-
-    def residual(self, t, y, dydt):
-        p = self.param_vec
-        delta = np.empty(self.num_odes)
-        weave.inline(self._code_eqs, ['delta', 't', 'y', 'dydt', 'p'])
-        return np.array(delta), 0
 
 
 class PyDasModelCython(DASSL):
