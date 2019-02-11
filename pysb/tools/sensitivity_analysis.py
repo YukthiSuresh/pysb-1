@@ -112,7 +112,7 @@ class InitialsSensitivity(object):
 
 
     def __init__(self, solver, values_to_sample, objective_function,
-                 observable, sens_type):
+                 observable):
         self._model = solver.model
         self._logger = get_logger(__name__, model=self._model)
         self._logger.info('%s created for observable %s' % (
@@ -135,7 +135,7 @@ class InitialsSensitivity(object):
 
         self._original_initial_conditions = np.zeros(len(self._model.parameters)) #need to change for parameters
         self._index_of_species_of_interest = self._create_index_of_species()
-        self.simulation_initials = self._setup_simulations(sens_type)
+        self.simulation_initials = self._setup_simulations(sens_type= 'params')
         # Stores the objective function value for the original unperturbed
         # model
         self._objective_fn_standard = None
@@ -534,7 +534,7 @@ class InitialsSensitivity(object):
         sens_ij_nm = self.sensitivity_multiset
 
         # Create heatmap and boxplot of data
-        fig = plt.figure(figsize=(14, 10))
+        fig = plt.figure()
         plt.subplots_adjust(hspace=0.1)
 
         # use gridspec to scale colorbar nicely
