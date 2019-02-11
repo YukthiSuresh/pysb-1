@@ -141,8 +141,8 @@ class CupSodaSimulator(Simulator):
         # some sane default options for a few well-known integrators
         'cupsoda': {
             'max_steps': 20000, # max # of internal iterations (LSODA's MXSTEP)
-            'atol': 1e-8,  # absolute tolerance
-            'rtol': 1e-8,  # relative tolerance
+            'atol': 1e-6,  # absolute tolerance
+            'rtol': 1e-6,  # relative tolerance
             'n_blocks': None,  # number of GPU blocks
             'memory_usage': 'sharedconstant'}}  # see _memory_options dict
 

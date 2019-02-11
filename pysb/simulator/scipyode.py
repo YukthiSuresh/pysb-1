@@ -592,3 +592,6 @@ class _DistutilsProxyLoggerAdapter(logging.LoggerAdapter):
     warn = logging.LoggerAdapter.info
     # Provide 'fatal' to match up with distutils log functions.
     fatal = logging.LoggerAdapter.critical
+
+
+
