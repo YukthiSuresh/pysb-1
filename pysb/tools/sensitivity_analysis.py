@@ -535,7 +535,7 @@ class InitialsSensitivity(object):
         sens_ij_nm = self.sensitivity_multiset
 
         # Create heatmap and boxplot of data
-        fig = plt.figure(figsize = (20,10))
+        plt.figure(figsize = (20,10))
         # plt.subplots_adjust(hspace=0.1)
 
         # use gridspec to scale colorbar nicely
@@ -578,14 +578,14 @@ class InitialsSensitivity(object):
         color_bar.plt.set_xticklabels(ticks)
 
         # create boxplot of single parameter sensitivities
-        fig = plt.figure(figsize=(20, 10))
-        plt = plt.subplot(gs2[1])
+        plt.figure(figsize=(20, 10))
+        #plt.subplot(gs2[1])
         x = [np.array(mat).flatten() for mat in sens_ij_nm[::-1]]
         plt.boxplot(x, vert=False, labels=None, showfliers=True, whis='range')
         plt.set_xlim(v_min - 2, v_max + 2)
         if x_axis_label is not None:
             plt.set_xlabel(x_axis_label, fontsize=12)
-        plt.setp(plt, yticklabels=reversed(self._ic_params_of_interest))
+        plt.setp(gs2[1], yticklabels=reversed(self._ic_params_of_interest))
         plt.yaxis.tick_left()
         plt.set_aspect(1. / plt.get_data_ratio(), adjustable='box')
         if save_name is not None:
