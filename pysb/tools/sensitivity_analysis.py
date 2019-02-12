@@ -511,7 +511,6 @@ class InitialsSensitivity(object):
         plt.close()
 
         return fig
-
     def create_boxplot_and_heatplot(self, x_axis_label=None, save_name=None,
                                     out_dir=None, show=False):
         """
@@ -537,7 +536,7 @@ class InitialsSensitivity(object):
 
         # Create heatmap and boxplot of data
         fig = plt.figure(figsize = (20,10))
-        plt.subplots_adjust(hspace=0.1)
+        # plt.subplots_adjust(hspace=0.1)
 
         # use gridspec to scale colorbar nicely
         outer = gridspec.GridSpec(2, 1, width_ratios=[1.],
@@ -546,17 +545,20 @@ class InitialsSensitivity(object):
         gs1 = gridspec.GridSpecFromSubplotSpec(1, 1, subplot_spec=outer[0])
         gs2 = gridspec.GridSpecFromSubplotSpec(2, 1, subplot_spec=outer[1],
                                                hspace=.35)
-        ax0 = plt.subplot(gs1[0])
-        ax1 = plt.subplot(gs2[0])
+        # ax0 = plt.subplot(gs1[0])
+        # ax1 = plt.subplot(gs2[0])
 
         # scale the colors to minimum or maximum of p matrix
         v_max = max(np.abs(self.p_matrix.min()), self.p_matrix.max())
         v_min = -1 * v_max
 
         # create heatmap of sensitivities
-        im = ax1.imshow(self.p_matrix, interpolation='nearest', origin='upper',
-                        cmap=plt.get_cmap(colors), vmin=v_min,
-                        vmax=v_max, extent=[0, self._nm, 0, self._nm])
+        im = plt.imshow(self.p_matrix, interpolation='nearest', origin='upper',
+                                            cmap=plt.get_cmap(colors), vmin=v_min,
+                                            vmax=v_max, extent=[0, self._nm, 0, self._nm])
+        # plt.imshow(self.p_matrix, interpolation='nearest', origin='upper',
+        #                 cmap=plt.get_cmap(colors), vmin=v_min,
+        #                 vmax=v_max, extent=[0, self._nm, 0, self._nm])
 
         shape_label = np.arange(self._n_sam / 2, self._nm, self._n_sam)
         plt.xticks(shape_label, self._ic_params_of_interest,
@@ -564,27 +566,28 @@ class InitialsSensitivity(object):
         plt.yticks(shape_label, reversed(self._ic_params_of_interest),
                    fontsize=12)
         x_ticks = ([i for i in range(0, self._nm, self._n_sam)])
-        ax1.set_xticks(x_ticks, minor=True)
-        ax1.set_yticks(x_ticks, minor=True)
+        plt.set_xticks(x_ticks, minor=True)
+        plt.set_yticks(x_ticks, minor=True)
         plt.grid(True, which='minor', linestyle='--')
-        color_bar = plt.colorbar(im, cax=ax0, orientation='horizontal',
+        color_bar = plt.colorbar(im, orientation='horizontal',
                                  use_gridspec=True)
         color_bar.set_label('% change', y=1, labelpad=5)
-        color_bar.ax.xaxis.set_label_position('top')
+        color_bar.plt.xaxis.set_label_position('top')
         ticks = np.linspace(v_min, v_max, 5, dtype=int)
         color_bar.set_ticks(ticks)
-        color_bar.ax.set_xticklabels(ticks)
+        color_bar.plt.set_xticklabels(ticks)
 
         # create boxplot of single parameter sensitivities
-        ax2 = plt.subplot(gs2[1])
+        fig = plt.figure(figsize=(20, 10))
+        plt = plt.subplot(gs2[1])
         x = [np.array(mat).flatten() for mat in sens_ij_nm[::-1]]
-        ax2.boxplot(x, vert=False, labels=None, showfliers=True, whis='range')
-        ax2.set_xlim(v_min - 2, v_max + 2)
+        plt.boxplot(x, vert=False, labels=None, showfliers=True, whis='range')
+        plt.set_xlim(v_min - 2, v_max + 2)
         if x_axis_label is not None:
-            ax2.set_xlabel(x_axis_label, fontsize=12)
-        plt.setp(ax2, yticklabels=reversed(self._ic_params_of_interest))
-        ax2.yaxis.tick_left()
-        ax2.set_aspect(1. / ax2.get_data_ratio(), adjustable='box')
+            plt.set_xlabel(x_axis_label, fontsize=12)
+        plt.setp(plt, yticklabels=reversed(self._ic_params_of_interest))
+        plt.yaxis.tick_left()
+        plt.set_aspect(1. / plt.get_data_ratio(), adjustable='box')
         if save_name is not None:
             if out_dir is None:
                 out_dir = '.'
@@ -601,6 +604,96 @@ class InitialsSensitivity(object):
         plt.close()
 
         return fig
+
+    # def create_boxplot_and_heatplot(self, x_axis_label=None, save_name=None,
+    #                                 out_dir=None, show=False):
+    #     """
+    #     Heat map and box plot of sensitivities
+    #     Parameters
+    #     ----------
+    #     x_axis_label : str, optional
+    #         label for x asis
+    #     save_name : str, optional
+    #         name of figure to save
+    #     out_dir : str, option
+    #         output directory to save figures
+    #     show : bool
+    #         Show plot if True
+    #     Returns
+    #     -------
+    #     matplotlib.figure.Figure
+    #         The matplotlib figure object for further adjustments, if required
+    #     """
+    #
+    #     colors = 'seismic'
+    #     sens_ij_nm = self.sensitivity_multiset
+    #
+    #     # Create heatmap and boxplot of data
+    #     fig = plt.figure(figsize = (20,10))
+    #     plt.subplots_adjust(hspace=0.1)
+    #
+    #     # use gridspec to scale colorbar nicely
+    #     outer = gridspec.GridSpec(2, 1, width_ratios=[1.],
+    #                               height_ratios=[0.03, 1])
+    #
+    #     gs1 = gridspec.GridSpecFromSubplotSpec(1, 1, subplot_spec=outer[0])
+    #     gs2 = gridspec.GridSpecFromSubplotSpec(2, 1, subplot_spec=outer[1],
+    #                                            hspace=.35)
+    #     ax0 = plt.subplot(gs1[0])
+    #     ax1 = plt.subplot(gs2[0])
+    #
+    #     # scale the colors to minimum or maximum of p matrix
+    #     v_max = max(np.abs(self.p_matrix.min()), self.p_matrix.max())
+    #     v_min = -1 * v_max
+    #
+    #     # create heatmap of sensitivities
+    #     im = ax1.imshow(self.p_matrix, interpolation='nearest', origin='upper',
+    #                     cmap=plt.get_cmap(colors), vmin=v_min,
+    #                     vmax=v_max, extent=[0, self._nm, 0, self._nm])
+    #
+    #     shape_label = np.arange(self._n_sam / 2, self._nm, self._n_sam)
+    #     plt.xticks(shape_label, self._ic_params_of_interest,
+    #                rotation='vertical', fontsize=12)
+    #     plt.yticks(shape_label, reversed(self._ic_params_of_interest),
+    #                fontsize=12)
+    #     x_ticks = ([i for i in range(0, self._nm, self._n_sam)])
+    #     ax1.set_xticks(x_ticks, minor=True)
+    #     ax1.set_yticks(x_ticks, minor=True)
+    #     plt.grid(True, which='minor', linestyle='--')
+    #     color_bar = plt.colorbar(im, cax=ax0, orientation='horizontal',
+    #                              use_gridspec=True)
+    #     color_bar.set_label('% change', y=1, labelpad=5)
+    #     color_bar.ax.xaxis.set_label_position('top')
+    #     ticks = np.linspace(v_min, v_max, 5, dtype=int)
+    #     color_bar.set_ticks(ticks)
+    #     color_bar.ax.set_xticklabels(ticks)
+    #
+    #     # create boxplot of single parameter sensitivities
+    #     ax2 = plt.subplot(gs2[1])
+    #     x = [np.array(mat).flatten() for mat in sens_ij_nm[::-1]]
+    #     ax2.boxplot(x, vert=False, labels=None, showfliers=True, whis='range')
+    #     ax2.set_xlim(v_min - 2, v_max + 2)
+    #     if x_axis_label is not None:
+    #         ax2.set_xlabel(x_axis_label, fontsize=12)
+    #     plt.setp(ax2, yticklabels=reversed(self._ic_params_of_interest))
+    #     ax2.yaxis.tick_left()
+    #     ax2.set_aspect(1. / ax2.get_data_ratio(), adjustable='box')
+    #     if save_name is not None:
+    #         if out_dir is None:
+    #             out_dir = '.'
+    #         if not os.path.exists(out_dir):
+    #             os.mkdir(out_dir)
+    #         plt.savefig(os.path.join(out_dir, save_name + '.png'),
+    #                     bbox_inches='tight')
+    #         plt.savefig(os.path.join(out_dir, save_name + '.eps'),
+    #                     bbox_inches='tight')
+    #         plt.savefig(os.path.join(out_dir, save_name + '.svg'),
+    #                     bbox_inches='tight')
+    #     if show:
+    #         plt.show()
+    #     plt.close()
+    #
+    #     return fig
 
 
 def cartesian_product(array_1, array_2):
