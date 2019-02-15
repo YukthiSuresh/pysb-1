@@ -144,7 +144,7 @@ class CupSodaSimulator(Simulator):
             'atol': 1e-6,  # absolute tolerance
             'rtol': 1e-6,  # relative tolerance
             'n_blocks': None,  # number of GPU blocks
-            'memory_usage': 'sharedconstant'}}  # see _memory_options dict
+            'memory_usage': 'global'}}  # see _memory_options dict
 
     _integrator_options_allowed = {'max_steps', 'atol', 'rtol', 'n_blocks',
                                    'memory_usage', 'vol'}
