@@ -105,11 +105,6 @@ class InitialsSensitivity(object):
       [-4.5381 -4.5381  0.      0.    ]]
     >>> sens.create_boxplot_and_heatplot() #doctest: +SKIP
     """
-    # rate_params = model.parameters_rules()  # these are only the parameters involved in the rules
-    # param_values = np.array([p.value for p in model.parameters])  # these are all the parameters
-    # rate_mask = np.array([p in rate_params for p in model.parameters])
-    # param_values[rate_mask] = 10 ** pars
-
 
     def __init__(self, solver, values_to_sample, objective_function,
                  observable, sens_type):
@@ -121,57 +116,39 @@ class InitialsSensitivity(object):
         self._values_to_sample = values_to_sample
         if solver is None or not isinstance(solver,
                                             pysb.simulator.base.Simulator):
-            raise(TypeError, "solver must be a pysb.simulator object")
+            raise (TypeError, "solver must be a pysb.simulator object")
         self._solver = solver
         self.objective_function = objective_function
         self.observable = observable
+        self._sens_type = sens_type
+        if self._sens_type == 'params':
+            self.index = [i.name for i in self._model.parameters_rules()]
+            self.orig_vals = [i.value for i in self._model.parameters]
+        elif self._sens_type == 'initials':
+            self.index = [i[1].name for i in self._model.initial_conditions]
+            self.orig_vals = [i.value for i in self._model.parameters]
+        else:
+            self.index = [i.name for i in self._model.parameters]
+            self.orig_vals = [i.value for i in self._model.parameters]
 
+        self.index_of_param = {}
+        for n, i in enumerate(self.index):
+            self.index_of_param[i] = n
+
+        self._n_sam = len(self._values_to_sample)
+        self._n_species = len(self.index)
+        self._nm = self._n_species * self._n_sam
+        self._size_of_matrix = self._nm ** 2
+        self._shape_of_matrix = self._nm, self._nm
+        self.params_to_run = self._setup_simulations()
         # Outputs
         self.b_matrix = []
         self.b_prime_matrix = []
         self.p_prime_matrix = np.zeros(self._size_of_matrix)
         self.p_matrix = np.zeros(self._size_of_matrix)
-
-        self._original_initial_conditions = np.zeros(len(self._model.parameters)) #need to change for parameters
-        self._index_of_species_of_interest = self._create_index_of_species()
-        self.simulation_initials = self._setup_simulations(sens_type)
-        self.n_params = self._set_params_of_interest(sens_type)
-
         # Stores the objective function value for the original unperturbed
         # model
         self._objective_fn_standard = None
-
-    def _set_params_of_interest(self, sens_type):
-        if sens_type == 'params':
-            self.n_params = [i.name for i in self._model.parameters_rules()]
-        elif sens_type == 'initials':
-            self.n_params = [i[1].name for i in self._model.initial_conditions]
-        else:
-            self.n_params = [i.name for i in self._model.parameters]
-        return self.n_params
-
-    # @property
-    def _n_species(self):
-        # print(self._set_params_of_interest(sens_type))
-        return len(self._set_params_of_interest(sens_type))
-
-    @property
-    def _n_sam(self):
-        return len(self._values_to_sample)
-
-    @property
-    def _nm(self):
-        # print(_set_params_of_interest.type)
-        # print(type(_set_params_of_interest))
-        return len(self._n_species) * self._n_sam
-
-    @property
-    def _size_of_matrix(self):
-        return self._nm ** 2
-
-    @property
-    def _shape_of_matrix(self):
-        return self._nm, self._nm
 
     @property
     def sensitivity_multiset(self):
@@ -227,8 +204,11 @@ class InitialsSensitivity(object):
         sim_results = self._solver.run(param_values=None, initials=None)
         self._objective_fn_standard = self.objective_function(
             np.array(sim_results.observables[self.observable]))
+        if self._sens_type == 'initials':
+            traj = self._solver.run(initials=self.params_to_run)
+        else:
+            traj = self._solver.run(param_values=self.params_to_run)
 
-        traj = self._solver.run(param_values=self.simulation_initials) #change for parameter trajectories
         sensitivity_output = np.array(traj.observables)[self.observable].T
         p_matrix = np.zeros(self._size_of_matrix)
         p_prime_matrix = np.zeros(self._size_of_matrix)
@@ -266,28 +246,14 @@ class InitialsSensitivity(object):
             np.savetxt(p_name, self.p_matrix)
             np.savetxt(p_prime_name, self.p_prime_matrix)
 
-    def _create_index_of_species(self):
-        """ create dictionary of initial conditions by index """
-        index_of_init_condition = {}
-        for n,i in enumerate(self._model.parameters):
-            index_of_init_condition[i.name] = n
-            # for sp_idx, sp in enumerate(self._model.species):
-            #     if ic_sp.is_equivalent_to(sp):
-            #         self._original_initial_conditions[sp_idx] = ic_param.value
-            #         if ic_param.name in self._ic_params_of_interest:
-            #             index_of_init_condition[ic_param.name] = sp_idx
-        index_of_species_of_interest = collections.OrderedDict(
-            sorted(index_of_init_condition.items()))
-        return index_of_species_of_interest
-
     def _g_function(self):
         """ creates sample matrix, index of samples values, and shows bij """
         counter = -1
         sampled_values_index = set()
         bij_unique = dict()
         sampling_matrix = np.zeros(
-            (self._size_of_matrix, len(self._model.parameters)))
-        sampling_matrix[:, :] = self._original_initial_conditions
+            (self._size_of_matrix, len(self.orig_vals)))
+        sampling_matrix[:, :] = self.orig_vals
         # print(sampling_matrix.shape)
         matrix = self.b_matrix
         for j in range(len(matrix)):
@@ -298,13 +264,12 @@ class InitialsSensitivity(object):
                 s_2 = str(i[1]) + str(i[0])
                 counter += 1
 
-                if index_i == index_j:
-                    continue
-                elif s_1 in bij_unique or s_2 in bij_unique:
+                if index_i == index_j \
+                        or s_1 in bij_unique or s_2 in bij_unique:
                     continue
                 else:
-                    x = self._index_of_species_of_interest[index_i]
-                    y = self._index_of_species_of_interest[index_j]
+                    x = self.index_of_param[index_i]
+                    y = self.index_of_param[index_j]
                     sampling_matrix[counter, x] *= sigma_i
                     sampling_matrix[counter, y] *= sigma_j
                     bij_unique[s_1] = counter
@@ -322,28 +287,15 @@ class InitialsSensitivity(object):
             Matrix of initial conditions
         """
         # create matrix (cartesian product of sample vals vs index of species
-        if sens_type == 'params':
-            index = [i.name for i in self._model.parameters_rules()]
-        elif sens_type == 'initials':
-            index = [i[1].name for i in self._model.initial_conditions]
-        else:
-            index = [i.name for i in self._model.parameters]
-        a_matrix = cartesian_product(self._values_to_sample, index)
-        # reshape to flatten
-        print(index)
-        print(len(index))
-        # print(a_matrix)
-        # print(a_matrix.shape)
-        # print(self._n_sam, self._n_species)
-        a_matrix = a_matrix.T.flatten()
+        a_matrix = cartesian_product(self._values_to_sample,
+                                     self.index).T.flatten()
 
         # creates matrix b
         self.b_matrix = cartesian_product(a_matrix, a_matrix)
 
         # create matrix a'
         a_prime = cartesian_product(np.ones(self._n_sam),
-                                    index)
-        a_prime = a_prime.T.flatten()
+                                    self.index).T.flatten()
 
         # creates matrix b prime
         self.b_prime_matrix = cartesian_product(a_prime, a_matrix)
@@ -353,7 +305,7 @@ class InitialsSensitivity(object):
         n_b_index = len(self.b_index)
 
         b_prime = np.zeros((self._size_of_matrix, len(self._model.parameters)))
-        b_prime[:, :] = self._original_initial_conditions
+        b_prime[:, :] = self.orig_vals
         counter = -1
 
         bp_not_in_b_raw = set()
@@ -378,8 +330,8 @@ class InitialsSensitivity(object):
                     bp_not_in_b_dict[counter] = bp_not_in_b_visited[s_1]
                 else:
                     new_sim_counter += 1
-                    x = self._index_of_species_of_interest[index_i]
-                    y = self._index_of_species_of_interest[index_j]
+                    x = self.index_of_param[index_i]
+                    y = self.index_of_param[index_j]
                     b_prime[new_sim_counter, x] *= sigma_i
                     b_prime[new_sim_counter, y] *= sigma_j
                     bp_not_in_b_visited[s_1] = new_sim_counter + n_b_index
@@ -391,15 +343,17 @@ class InitialsSensitivity(object):
         x = b_to_run[list(self.b_index)]
         y = b_prime[list(bp_not_in_b_raw)]
         simulations = np.vstack((x, y))
-        print()
+        # print()
         self._logger.debug("Number of simulations to run = %s" % len(
-                           simulations))
+            simulations))
         return simulations
 
     def create_plot_p_h_pprime(self, save_name=None, out_dir=None, show=False):
         """
         Plot of P, H(B), and P'
+
         See :class:`InitialsSensitivity` for descriptions of these matrices
+
         Parameters
         ----------
         save_name : str, optional
@@ -408,6 +362,7 @@ class InitialsSensitivity(object):
             location to save figure
         show : bool
             show the plot if True
+
         Returns
         -------
         matplotlib.figure.Figure
@@ -459,6 +414,7 @@ class InitialsSensitivity(object):
                                          show=False):
         """
         Single plot containing heat plot of each specie pair
+
         Parameters
         ----------
         save_name : str, optional
@@ -467,6 +423,7 @@ class InitialsSensitivity(object):
             output directory
         show : bool
             show figure
+
         Returns
         -------
         matplotlib.figure.Figure
@@ -476,18 +433,18 @@ class InitialsSensitivity(object):
         sens_matrix = self.p_matrix - self.p_prime_matrix
         v_max = max(np.abs(self.p_matrix.min()), self.p_matrix.max())
         v_min = -1 * v_max
-        fig = plt.figure(figsize=(params + 6, params + 6))
-        gs = gridspec.GridSpec(params, params)
+        fig = plt.figure(figsize=(self._n_species + 6, self._n_species + 6))
+        gs = gridspec.GridSpec(self._n_species, self._n_species)
         # creates a plot of each species vs each species
         # adds space between plots so you can zoom in on output pairs
         for n, j in enumerate(range(0, self._nm, self._n_sam)):
             for m, i in enumerate(range(0, self._nm, self._n_sam)):
                 ax2 = plt.subplot(gs[n, m])
                 if n == 0:
-                    ax2.set_xlabel(self._set_params_of_interest[m], fontsize=20)
+                    ax2.set_xlabel(self.index[m], fontsize=20)
                     ax2.xaxis.set_label_position('top')
                 if m == 0:
-                    ax2.set_ylabel(self._set_params_of_interest[n], fontsize=20)
+                    ax2.set_ylabel(self.index[n], fontsize=20)
                 plt.xticks([])
                 plt.yticks([])
                 if i != j:
@@ -516,216 +473,7 @@ class InitialsSensitivity(object):
         plt.close()
 
         return fig
-    # def create_boxplot_and_heatplot(self, x_axis_label=None, save_name=None,
-    #                                 out_dir=None, show=False):
-    #     """
-    #     Heat map and box plot of sensitivities
-    #     Parameters
-    #     ----------
-    #     x_axis_label : str, optional
-    #         label for x asis
-    #     save_name : str, optional
-    #         name of figure to save
-    #     out_dir : str, option
-    #         output directory to save figures
-    #     show : bool
-    #         Show plot if True
-    #     Returns
-    #     -------
-    #     matplotlib.figure.Figure
-    #         The matplotlib figure object for further adjustments, if required
-    #     """
-    #
-    #     colors = 'seismic'
-    #     sens_ij_nm = self.sensitivity_multiset
-    #
-    #     # Create heatmap and boxplot of data
-    #     plt.figure(figsize = (20,10))
-    #     # plt.subplots_adjust(hspace=0.1)
-    #
-    #     # use gridspec to scale colorbar nicely
-    #     outer = gridspec.GridSpec(2, 1, width_ratios=[1.],
-    #                               height_ratios=[0.03, 1])
-    #
-    #     gs1 = gridspec.GridSpecFromSubplotSpec(1, 1, subplot_spec=outer[0])
-    #     gs2 = gridspec.GridSpecFromSubplotSpec(2, 1, subplot_spec=outer[1],
-    #                                            hspace=.35)
-    #     # ax0 = plt.subplot(gs1[0])
-    #     # ax1 = plt.subplot(gs2[0])
-    #
-    #     # scale the colors to minimum or maximum of p matrix
-    #     v_max = max(np.abs(self.p_matrix.min()), self.p_matrix.max())
-    #     v_min = -1 * v_max
-    #
-    #     # create heatmap of sensitivities
-    #     im = plt.imshow(self.p_matrix, interpolation='nearest', origin='upper',
-    #                                         cmap=plt.get_cmap(colors), vmin=v_min,
-    #                                         vmax=v_max, extent=[0, self._nm, 0, self._nm])
-    #     # plt.imshow(self.p_matrix, interpolation='nearest', origin='upper',
-    #     #                 cmap=plt.get_cmap(colors), vmin=v_min,
-    #     #                 vmax=v_max, extent=[0, self._nm, 0, self._nm])
-    #
-    #     shape_label = np.arange(self._n_sam / 2, self._nm, self._n_sam)
-    #     plt.xticks(shape_label, self._ic_params_of_interest,
-    #                rotation='vertical', fontsize=12)
-    #     plt.yticks(shape_label, reversed(self._ic_params_of_interest),
-    #                fontsize=12)
-    #     x_ticks = ([i for i in range(0, self._nm, self._n_sam)])
-    #     plt.xticks(x_ticks)
-    #     plt.yticks(x_ticks)
-    #     plt.grid(True, which='minor', linestyle='--')
-    #     color_bar = plt.colorbar(im, orientation='horizontal',
-    #                              use_gridspec=True)
-    #     color_bar.set_label('% change', y=1, labelpad=5)
-    #     color_bar.ax.xaxis.set_label_position('top')
-    #     ticks = np.linspace(v_min, v_max, 5, dtype=int)
-    #     color_bar.set_ticks(ticks)
-    #     color_bar.ax.set_xticklabels(ticks)
-    #
-    #     # create boxplot of single parameter sensitivities
-    #     ax2 = plt.subplot(gs2[1])
-    #     x = [np.array(mat).flatten() for mat in sens_ij_nm[::-1]]
-    #     ax2.boxplot(x, vert=False, labels=None, showfliers=True, whis='range')
-    #     ax2.set_xlim(v_min - 2, v_max + 2)
-    #     if x_axis_label is not None:
-    #         ax2.set_xlabel(x_axis_label, fontsize=12)
-    #     plt.setp(ax2, yticklabels=reversed(self._ic_params_of_interest))
-    #     ax2.yaxis.tick_left()
-    #     ax2.set_aspect(1. / ax2.get_data_ratio(), adjustable='box')
-    #     if save_name is not None:
-    #         if out_dir is None:
-    #             out_dir = '.'
-    #         if not os.path.exists(out_dir):
-    #             os.mkdir(out_dir)
-    #         plt.savefig(os.path.join(out_dir, save_name + '.png'),
-    #                     bbox_inches='tight')
-    #         plt.savefig(os.path.join(out_dir, save_name + '.eps'),
-    #                     bbox_inches='tight')
-    #         plt.savefig(os.path.join(out_dir, save_name + '.svg'),
-    #                     bbox_inches='tight')
-    #     if show:
-    #         plt.show()
-    #     plt.close()
-    #
-    #     return fig
-    #
-    #     fig = plt.figure(figsize=(20, 10))
-    #     ax2 = plt.axes()
-    #     #plt.subplot(gs2[1])
-    #     x = [np.array(mat).flatten() for mat in sens_ij_nm[::-1]]
-    #     ax2.boxplot(x, vert=False, labels=None, showfliers=True, whis='range')
-    #     ax2.set_xlim(v_min - 2, v_max + 2)
-    #     if x_axis_label is not None:
-    #         ax2.set_xlabel(x_axis_label, fontsize=12)
-    #     plt.setp(gs2[1], yticklabels=reversed(self._ic_params_of_interest))
-    #     plt.yaxis.tick_left()
-    #     plt.set_aspect(1. / plt.get_data_ratio(), adjustable='box')
-    #     if save_name is not None:
-    #         if out_dir is None:
-    #             out_dir = '.'
-    #         if not os.path.exists(out_dir):
-    #             os.mkdir(out_dir)
-    #         plt.savefig(os.path.join(out_dir, save_name + '.png'),
-    #                     bbox_inches='tight')
-    #         plt.savefig(os.path.join(out_dir, save_name + '.eps'),
-    #                     bbox_inches='tight')
-    #         plt.savefig(os.path.join(out_dir, save_name + '.svg'),
-    #                     bbox_inches='tight')
-    #     if show:
-    #         plt.show()
-    #     plt.close()
-    #
-    #     return fig
 
-    # def create_boxplot_and_heatplot(self, x_axis_label=None, save_name=None,
-    #                                 out_dir=None, show=False):
-    #     """
-    #     Heat map and box plot of sensitivities
-    #     Parameters
-    #     ----------
-    #     x_axis_label : str, optional
-    #         label for x asis
-    #     save_name : str, optional
-    #         name of figure to save
-    #     out_dir : str, option
-    #         output directory to save figures
-    #     show : bool
-    #         Show plot if True
-    #     Returns
-    #     -------
-    #     matplotlib.figure.Figure
-    #         The matplotlib figure object for further adjustments, if required
-    #     """
-    #
-    #     colors = 'seismic'
-    #     sens_ij_nm = self.sensitivity_multiset
-    #
-    #     # Create heatmap and boxplot of data
-    #     fig = plt.figure(figsize=(14, 10))
-    #     plt.subplots_adjust(hspace=0.1)
-    #
-    #     # use gridspec to scale colorbar nicely
-    #     outer = gridspec.GridSpec(1, 2, width_ratios=[1., 1.],
-    #                               height_ratios=[0.03])
-    #
-    #     gs1 = gridspec.GridSpecFromSubplotSpec(1, 1, subplot_spec=outer[0])
-    #     gs2 = gridspec.GridSpecFromSubplotSpec(1, 2, subplot_spec=outer[1],
-    #                                            hspace=.35)
-    #     ax0 = plt.subplot(gs1[0])
-    #     ax1 = plt.subplot(gs2[0])
-    #
-    #     # scale the colors to minimum or maximum of p matrix
-    #     v_max = max(np.abs(self.p_matrix.min()), self.p_matrix.max())
-    #     v_min = -1 * v_max
-    #
-    #     # create heatmap of sensitivities
-    #     im = ax1.imshow(self.p_matrix, interpolation='nearest', origin='upper',
-    #                     cmap=plt.get_cmap(colors), vmin=v_min,
-    #                     vmax=v_max, extent=[0, self._nm, 0, self._nm])
-    #
-    #     shape_label = np.arange(self._n_sam / 2, self._nm, self._n_sam)
-    #     plt.xticks(shape_label, self._ic_params_of_interest,
-    #                rotation='vertical', fontsize=12)
-    #     plt.yticks(shape_label, reversed(self._ic_params_of_interest),
-    #                fontsize=12)
-    #     x_ticks = ([i for i in range(0, self._nm, self._n_sam)])
-    #     ax1.set_xticks(x_ticks, minor=True)
-    #     ax1.set_yticks(x_ticks, minor=True)
-    #     plt.grid(True, which='minor', linestyle='--')
-    #     color_bar = plt.colorbar(im, cax=ax0, orientation='horizontal',
-    #                              use_gridspec=True)
-    #     color_bar.set_label('% change', y=1, labelpad=5)
-    #     color_bar.ax.xaxis.set_label_position('top')
-    #     ticks = np.linspace(v_min, v_max, 5, dtype=int)
-    #     color_bar.set_ticks(ticks)
-    #     color_bar.ax.set_xticklabels(ticks)
-    #
-    #     # create boxplot of single parameter sensitivities
-    #     ax2 = plt.subplot(gs2[1])
-    #     x = [np.array(mat).flatten() for mat in sens_ij_nm[::-1]]
-    #     ax2.boxplot(x, vert=False, labels=None, showfliers=True, whis='range')
-    #     # ax2.set_xlim(v_min - 2, v_max + 2)
-    #     if x_axis_label is not None:
-    #         ax2.set_xlabel(x_axis_label, fontsize=12)
-    #     plt.setp(ax2, yticklabels=reversed(self._ic_params_of_interest))
-    #     ax2.yaxis.tick_left()
-    #     ax2.set_aspect(1. / ax2.get_data_ratio(), adjustable='box')
-    #     if save_name is not None:
-    #         if out_dir is None:
-    #             out_dir = '.'
-    #         if not os.path.exists(out_dir):
-    #             os.mkdir(out_dir)
-    #         plt.savefig(os.path.join(out_dir, save_name + '.png'),
-    #                     bbox_inches='tight')
-    #         plt.savefig(os.path.join(out_dir, save_name + '.eps'),
-    #                     bbox_inches='tight')
-    #         plt.savefig(os.path.join(out_dir, save_name + '.svg'),
-    #                     bbox_inches='tight')
-    #     if show:
-    #         plt.show()
-    #     plt.close()
-    #
-    #     return fig
     def create_boxplot_and_heatplot(self, x_axis_label=None, save_name=None,
                                     out_dir=None, show=False):
         """
@@ -775,9 +523,9 @@ class InitialsSensitivity(object):
                         vmax=v_max, extent=[0, self._nm, 0, self._nm])
 
         shape_label = np.arange(self._n_sam / 2, self._nm, self._n_sam)
-        plt.xticks(shape_label, self._set_params_of_interest,
+        plt.xticks(shape_label, self.index,
                    rotation='vertical', fontsize=12)
-        plt.yticks(shape_label, reversed(self._set_params_of_interest),
+        plt.yticks(shape_label, reversed(self.index),
                    fontsize=12)
         x_ticks = ([i for i in range(0, self._nm, self._n_sam)])
         ax1.set_xticks(x_ticks, minor=True)
@@ -794,13 +542,11 @@ class InitialsSensitivity(object):
         # create boxplot of single parameter sensitivities
         ax2 = plt.subplot(gs2[1])
         x = [np.array(mat).flatten() for mat in sens_ij_nm[::-1]]
-        print('x')
-        print(x)
         ax2.boxplot(x, vert=False, labels=None, showfliers=True, whis='range')
-        # ax2.set_xlim(v_min - 2, v_max + 2)
+        ax2.set_xlim(v_min - 2, v_max + 2)
         if x_axis_label is not None:
             ax2.set_xlabel(x_axis_label, fontsize=12)
-        plt.setp(ax2, yticklabels=reversed(self._set_params_of_interest))
+        plt.setp(ax2, yticklabels=reversed(self.index))
         ax2.yaxis.tick_left()
         ax2.set_aspect(1. / ax2.get_data_ratio(), adjustable='box')
         if save_name is not None:
@@ -819,6 +565,7 @@ class InitialsSensitivity(object):
         plt.close()
 
         return fig
+
 
 def cartesian_product(array_1, array_2):
     """
