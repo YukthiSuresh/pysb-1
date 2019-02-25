@@ -540,7 +540,7 @@ class InitialsSensitivity(object):
         ax2 = plt.subplot(gs2[1])
         x = [np.array(mat).flatten() for mat in sens_ij_nm[::-1]]
         ax2.boxplot(x, vert=False, labels=None, showfliers=True, whis='range')
-        ax2.set_xlim(v_min - 2, v_max + 2)
+        #ax2.set_xlim(v_min - 2, v_max + 2)
         if x_axis_label is not None:
             ax2.set_xlabel(x_axis_label, fontsize=12)
         plt.setp(ax2, yticklabels=reversed(self.index))
