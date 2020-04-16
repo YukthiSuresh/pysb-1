@@ -30,7 +30,7 @@ def run_dae_against_scipy(eqn_mode):
         model = m.model
         dae_results = []
 
-        sim = DaeSimulator(model=model, tspan=tspan, eqn_mode=eqn_mode)
+        sim = DaeSimulator(model=model, tspan=tspan, compiler=eqn_mode)
         dae_results.append(sim.run().dataframe)
 
         odesim = ScipyOdeSimulator(model=model, tspan=tspan,
@@ -50,7 +50,7 @@ def test_dae_against_scipy():
 def test_dae_multi_initials():
     A = robertson.model.monomers['A']
     sim = DaeSimulator(model=robertson.model, tspan=np.linspace(0, 100, 101),
-                       eqn_mode='python')
+                       compiler='python')
     obs = sim.run(initials={A(): [0, 1, 2]}).observables
 
     assert np.allclose([obs[i]['A_total'][0] for i in range(3)], [0, 1, 2])
@@ -58,10 +58,26 @@ def test_dae_multi_initials():
 
 def test_dae_multi_params():
     sim = DaeSimulator(model=robertson.model, tspan=np.linspace(0, 100, 101),
-                       eqn_mode='python')
+                       compiler='python')
     obs = sim.run(param_values={'k1': [0, 0.04]}).observables
 
-    print([obs[i]['B_total'][-1] for i in range(2)])
+    assert np.allclose([obs[i]['B_total'][-1] for i in range(2)],
+                       [0, 6.15359e-06])
+
+
+def test_dae_parallel_python():
+    sim = DaeSimulator(model=robertson.model, tspan=np.linspace(0, 100, 101),
+                       compiler='python')
+    obs = sim.run(param_values={'k1': [0, 0.04]}, num_processors=2).observables
+
+    assert np.allclose([obs[i]['B_total'][-1] for i in range(2)],
+                       [0, 6.15359e-06])
+
+
+def test_dae_parallel_cython():
+    sim = DaeSimulator(model=robertson.model, tspan=np.linspace(0, 100, 101),
+                       compiler='cython')
+    obs = sim.run(param_values={'k1': [0, 0.04]}, num_processors=2).observables
 
     assert np.allclose([obs[i]['B_total'][-1] for i in range(2)],
                        [0, 6.15359e-06])
