@@ -18,7 +18,8 @@ import logging
 import itertools
 import contextlib
 import importlib
-from concurrent.futures import ProcessPoolExecutor, Executor, Future, TimeoutError
+from concurrent.futures import Executor, Future, TimeoutError
+from pebble import ProcessPool
 
 
 class ScipyOdeSimulator(Simulator):
@@ -391,27 +392,39 @@ class ScipyOdeSimulator(Simulator):
             self._logger.debug('Multi-processor (parallel) mode using {} '
                                'processes'.format(num_processors))
 
-        with SerialExecutor() if num_processors == 1 else \
-                ProcessPoolExecutor(max_workers=num_processors) as executor:
-            sim_partial = partial(_integrator_process, code_eqs=self._code_eqs, jac_eqs=self._jac_eqs,
-                                  num_species=num_species, num_odes=num_odes, tspan=self.tspan,
-                                  integrator_name=self._init_kwargs.get('integrator', 'vode'),
-                                  compiler=self._compiler, integrator_opts=self.opts,
-                                  compiler_directives=self._compiler_directives)
+        sim_partial = partial(_integrator_process, code_eqs=self._code_eqs, jac_eqs=self._jac_eqs,
+                              num_species=num_species, num_odes=num_odes, tspan=self.tspan,
+                              integrator_name=self._init_kwargs.get('integrator', 'vode'),
+                              compiler=self._compiler, integrator_opts=self.opts,
+                              compiler_directives=self._compiler_directives)
 
-            results = [executor.submit(sim_partial, *args)
-                       for args in zip(self.initials, self.param_values)]
-            trajectories = []
-            for sim_idx, r in enumerate(results):
+        if num_processors == 1:
+            with SerialExecutor() as executor:
+                results = [executor.submit(sim_partial, *args)
+                           for args in zip(self.initials, self.param_values)]
                 try:
-                    trajectories.append(r.result(timeout=timeout))
-                except TimeoutError:
-                    self._logger.warning('Simulation %d has timeout' % sim_idx)
-                    nan_array = np.empty((len(self.tspan), num_species))
-                    nan_array[:] = np.nan
-                    trajectories.append(nan_array)
+                    trajectories = [r.result() for r in results]
                 finally:
-                    r.cancel()
+                    for r in results:
+                        r.cancel()
+
+        else:
+            with ProcessPool(max_workers=num_processors) as pool:
+                results = [pool.schedule(sim_partial, args=args, timeout=timeout)
+                           for args in zip(self.initials, self.param_values)]
+
+                trajectories = []
+                for sim_idx, r in enumerate(results):
+                    try:
+                        trajectory = r.result()
+                        trajectories.append(trajectory)
+                    except (TimeoutError, ZeroDivisionError):
+                        self._logger.warning('Simulation %d has timeout' % sim_idx)
+                        nan_array = np.empty((len(self.tspan), num_species))
+                        nan_array[:] = np.nan
+                        trajectories.append(nan_array)
+                    finally:
+                        r.cancel()
 
         tout = np.array([self.tspan] * n_sims)
         self._logger.info('All simulation(s) complete')
