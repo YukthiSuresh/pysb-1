@@ -20,7 +20,7 @@ import contextlib
 import importlib
 from concurrent.futures import Executor, Future, TimeoutError
 from pebble import ProcessPool
-
+from tqdm import tqdm
 
 class ScipyOdeSimulator(Simulator):
     """
@@ -398,10 +398,19 @@ class ScipyOdeSimulator(Simulator):
                               compiler=self._compiler, integrator_opts=self.opts,
                               compiler_directives=self._compiler_directives)
 
+        pbar = tqdm(total=len(self.param_values))
+
+        def update(*a):
+            pbar.update()
+
         if num_processors == 1:
             with SerialExecutor() as executor:
-                results = [executor.submit(sim_partial, *args)
-                           for args in zip(self.initials, self.param_values)]
+                results = []
+                for args in zip(self.initials, self.param_values):
+                    f = executor.submit(sim_partial, *args)
+                    f.add_done_callback(update)
+                    results.append(f)
+
                 try:
                     trajectories = [r.result() for r in results]
                 finally:
@@ -410,8 +419,11 @@ class ScipyOdeSimulator(Simulator):
 
         else:
             with ProcessPool(max_workers=num_processors) as pool:
-                results = [pool.schedule(sim_partial, args=args, timeout=timeout)
-                           for args in zip(self.initials, self.param_values)]
+                results = []
+                for args in zip(self.initials, self.param_values):
+                    f = pool.schedule(sim_partial, args=args, timeout=timeout)
+                    f.add_done_callback(update)
+                    results.append(f)
 
                 trajectories = []
                 for sim_idx, r in enumerate(results):
