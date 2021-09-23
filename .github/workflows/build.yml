@@ -22,7 +22,9 @@ jobs:
         conda info
         conda list
     - name: Install nose
-      run: sudo pip install nose
+      run: python -m pip
+           sudo pip install nose
+           sudo pip install coverage
     - name: Build PySB
       run: python setup.py build --build-lib=build/lib
     - name: Run nosetests
