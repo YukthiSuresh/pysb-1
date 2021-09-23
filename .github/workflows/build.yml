@@ -17,10 +17,6 @@ jobs:
         python-version: ${{ matrix.python-version }}
         environment-file: pysb-conda-env.yml
         activate-environment: pysb
-    - name: Install dependencies
-      shell: bash -l {0}
-      run: |
-          conda install --yes -c conda-forge -c alubbock numpy sympy scipy nose cython
     - name: Conda environment info
       run: |
         conda info
@@ -33,4 +29,4 @@ jobs:
     - name: Build PySB
       run: python setup.py build --build-lib=build/lib
     - name: Run nosetests
-      run: nosetests build/lib/pysb --with-coverage --cover-inclusive --cover-package=build/lib/pysb -a '!gpu'
+      run: nosetests build/lib/pysb --with-coverage
