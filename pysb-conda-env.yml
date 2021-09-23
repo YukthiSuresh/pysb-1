@@ -23,3 +23,5 @@ dependencies:
   - pip:
     - libroadrunner
     - python-libsbml
+    - coverage
+    - sympy
