@@ -28,5 +28,3 @@ jobs:
         sudo pip install coverage
     - name: Build PySB
       run: python setup.py build --build-lib=build/lib
-    - name: Run nosetests
-      run: nosetests build/lib/pysb --with-coverage
