@@ -21,6 +21,8 @@ jobs:
       run: |
         conda info
         conda list
+    - name: Install nose
+      run: sudo pip install nose
     - name: Build PySB
       run: python setup.py build --build-lib=build/lib
     - name: Run nosetests
