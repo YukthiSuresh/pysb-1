@@ -38,6 +38,7 @@ jobs:
     - name: Build PySB
       run: python setup.py build --build-lib=build/lib
     - name: Run nosetests
+      shell: bash -l {0}
       run: |
        python3 -m pip install sympy
        nosetests build/lib/pysb --with-coverage --cover-inclusive --cover-package=build/lib/pysb -a '!gpu'
